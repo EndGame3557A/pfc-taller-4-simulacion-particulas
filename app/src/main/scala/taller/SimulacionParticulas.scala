@@ -89,27 +89,41 @@ class SimulacionParticulas {
    * otra cosa cuando las dos mitades no pesan igual.
    */
   def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = {
-    if(s.length<=umbral || umbral<=0) centroDeMasaSecuencial(s)
-    else {
-      val mitad = s.length / 2
-      val (izq,dech) = parallel(
-        centroDeMasaParalelo(s.slice(0,mitad), umbral),
-        centroDeMasaParalelo(s.slice(mitad,s.length), umbral)
-      )
-      izq + dech
+    def auxiliar(sub: Sistema): (Vector2, Double) = {
+      if (sub.length <= umbral || umbral <= 0) {
+        val m = masaTotal(sub)
+        val sumaPonderada = if (m == 0) Vector2(0.0, 0.0) else centroDeMasaSecuencial(sub) * m
+        (sumaPonderada, m)
+      } else {
+        val mitad = sub.length / 2
+        val ((vecIzq, masaIzq), (vecDech, masaDech)) = parallel(
+          auxiliar(sub.slice(0, mitad)),
+          auxiliar(sub.slice(mitad, sub.length))
+        )
+        (vecIzq + vecDech, masaIzq + masaDech)
+      }
     }
-  }
 
+    val (sumaTotal, masaTot) = auxiliar(s)
+    if (masaTot == 0) Vector2(0.0, 0.0) else sumaTotal * (1 / masaTot)
+  }
   // Punto 4: trabajo y profundidad --------------------------------------------
 
   /** El número total de operaciones, una por partícula. */
-  def trabajo(n: Int): Int = ???
+  def trabajo(n: Int): Int = {
+    n
+  }
 
   /** Cuántas veces se parte a la mitad, más el tramo que queda sin partir. */
-  def profundidad(n: Int, umbral: Int): Int = ???
+  def profundidad(n: Int, umbral: Int): Int = {
+      if (n <= umbral) n
+      else 1 + profundidad(n / 2, umbral)
+  }
 
   /** La profundidad más el trabajo entre p procesadores. */
-  def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = ???
+  def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = {
+    n/p + profundidad(n,umbral)
+  }
 
   // Punto 5: medir la aceleración ---------------------------------------------
 
@@ -122,11 +136,17 @@ class SimulacionParticulas {
   }
 
   /** El cociente entre el tiempo secuencial y el paralelo. */
-  def aceleracion(tSecuencial: Double, tParalelo: Double): Double = ???
+  def aceleracion(tSecuencial: Double, tParalelo: Double): Double = {
+    tSecuencial / tParalelo
+  }
 
   /**
    * El umbral que menos tarda de una lista de candidatos. Con la lista vacía,
    * el tamaño del sistema, que equivale a no repartir.
    */
-  def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int = ???
+  def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int = {
+
+      if (umbrales.isEmpty) s.length
+      else umbrales.minBy(u => medir(3)(pasoParalelo(s, dt, u)))
+  }
 }

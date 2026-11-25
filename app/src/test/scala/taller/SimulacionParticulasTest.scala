@@ -207,4 +207,150 @@ class SimulacionParticulasTest extends AnyFunSuite {
     val candidatos = List(16, 128, 1024)
     assert(candidatos.contains(umbralConveniente(grande, 0.5, candidatos)))
   }
+
+
+  //====================TEST ADICIONALES===============================
+
+  // Punto 1 (adicionales) -----------------------------------------------------
+
+  test("pasoSecuencial: velocidad negativa retrocede la posición") {
+    val q = Particula(Vector2(5, 5), Vector2(-1, -2), 1.0)
+    assert(cerca(pasoSecuencial(Array(q), 2.0).head.pos, Vector2(3.0, 1.0)))
+  }
+
+  test("pasoSecuencial: dt negativo mueve hacia atrás") {
+    assert(cerca(pasoSecuencial(Array(p), -1.0).head.pos, Vector2(-1.0, -2.0)))
+  }
+
+  test("pasoSecuencial: no modifica el sistema original") {
+    val antes = s(0).pos
+    pasoSecuencial(s, 5.0)
+    assert(s(0).pos == antes)
+  }
+
+  test("pasoSegmento: un tramo central coincide con el mismo tramo del secuencial") {
+    val tramo = pasoSegmento(grande, 0.5, 10, 20)
+    val esperado = pasoSecuencial(grande, 0.5).slice(10, 20)
+    assert(tramo.length == 10 &&
+      tramo.zip(esperado).forall { case (a, b) => cerca(a.pos, b.pos) })
+  }
+
+  test("pasoParalelo: tamaño impar y vacío coinciden con el secuencial") {
+    val impar = grande.take(7)
+    val ok = pasoParalelo(impar, 0.5, 2).zip(pasoSecuencial(impar, 0.5))
+      .forall { case (a, b) => cerca(a.pos, b.pos) }
+    assert(ok && pasoParalelo(vacio, 0.5, 1).isEmpty)
+  }
+
+  // Punto 2 (adicionales) -----------------------------------------------------
+
+  test("energiaSecuencial: masas y velocidades distintas") {
+    val mixto: Sistema = Array(
+      Particula(Vector2(0, 0), Vector2(1, 0), 1.0),  // 0.5
+      Particula(Vector2(0, 0), Vector2(0, 3), 4.0))  // 18
+    assert(cerca(energiaSecuencial(mixto), 18.5))
+  }
+
+  test("energiaSecuencial: el signo de la velocidad no cambia la energía") {
+    val negativa: Sistema = Array(Particula(Vector2(0, 0), Vector2(-3, -4), 2.0))
+    assert(cerca(energiaSecuencial(negativa), 25.0))
+  }
+
+  test("masaTotal: suma masas decimales") {
+    val dec: Sistema = Array(
+      Particula(Vector2(0, 0), Vector2(0, 0), 0.5),
+      Particula(Vector2(1, 1), Vector2(0, 0), 1.5),
+      Particula(Vector2(2, 2), Vector2(0, 0), 2.0))
+    assert(cerca(masaTotal(dec), 4.0))
+  }
+
+  test("centroDeMasaSecuencial: una sola partícula es su propia posición") {
+    val sola: Sistema = Array(Particula(Vector2(7, -3), Vector2(1, 1), 5.0))
+    assert(cerca(centroDeMasaSecuencial(sola), Vector2(7.0, -3.0)))
+  }
+
+  test("centroDeMasaSecuencial: tres partículas con masas distintas en 2D") {
+    val tres: Sistema = Array(
+      Particula(Vector2(0, 0), Vector2(0, 0), 2.0),
+      Particula(Vector2(3, 3), Vector2(0, 0), 1.0),
+      Particula(Vector2(0, 6), Vector2(0, 0), 1.0))
+    assert(cerca(centroDeMasaSecuencial(tres), Vector2(0.75, 2.25)))
+  }
+
+  // Punto 3 (adicionales) -----------------------------------------------------
+
+  test("energiaParalela: con umbral cero coincide con la secuencial") {
+    assert(cerca(energiaParalela(grande, 0), energiaSecuencial(grande)))
+  }
+
+  test("energiaParalela: tamaño impar coincide con la secuencial") {
+    val impar = grande.take(7)
+    assert(cerca(energiaParalela(impar, 2), energiaSecuencial(impar)))
+  }
+
+  test("centroDeMasaParalelo: mitades con masas muy distintas") {
+    val desigual: Sistema = Array(
+      Particula(Vector2(0, 0), Vector2(0, 0), 1.0),
+      Particula(Vector2(2, 0), Vector2(0, 0), 1.0),
+      Particula(Vector2(10, 0), Vector2(0, 0), 100.0),
+      Particula(Vector2(10, 10), Vector2(0, 0), 100.0))
+    assert(cerca(centroDeMasaParalelo(desigual, 2), Vector2(2002.0 / 202.0, 1000.0 / 202.0)))
+  }
+
+  test("centroDeMasaParalelo: con umbral cero coincide con el secuencial") {
+    assert(cerca(centroDeMasaParalelo(grande, 0), centroDeMasaSecuencial(grande)))
+  }
+
+  test("centroDeMasaParalelo: partículas de masa cero dan el origen") {
+    val sinMasa: Sistema = Array(
+      Particula(Vector2(5, 5), Vector2(0, 0), 0.0),
+      Particula(Vector2(8, 1), Vector2(0, 0), 0.0))
+    assert(centroDeMasaParalelo(sinMasa, 1) == Vector2(0, 0))
+  }
+
+  // Punto 4 (adicionales) -----------------------------------------------------
+
+  test("trabajo: cero partículas y siete partículas") {
+    assert(trabajo(0) == 0 && trabajo(7) == 7)
+  }
+
+  test("profundidad: n que no es potencia de 2 (10 -> 5 -> 2 -> 1)") {
+    assert(profundidad(10, 1) == 4)
+  }
+
+  test("profundidad: un millón de partículas con umbral 1000") {
+    assert(profundidad(1000000, 1000) == 986)
+  }
+
+  test("tiempoEstimado: la división entre procesadores es decimal") {
+    assert(cerca(tiempoEstimado(10, 4, 1), 6.5)) // 10/4 = 2.5, más profundidad 4
+  }
+
+  test("tiempoEstimado: con umbral igual a n el tramo queda completo") {
+    assert(cerca(tiempoEstimado(1000, 4, 1000), 250.0 + 1000.0))
+  }
+
+  // Punto 5 (adicionales) -----------------------------------------------------
+
+  test("aceleracion: un paralelo más lento da menos de 1") {
+    assert(cerca(aceleracion(50.0, 100.0), 0.5))
+  }
+
+  test("aceleracion: tiempo secuencial cero da cero") {
+    assert(cerca(aceleracion(0.0, 10.0), 0.0))
+  }
+
+  test("aceleracion: no depende de la escala de los tiempos") {
+    assert(cerca(aceleracion(10.0, 2.0), aceleracion(1000.0, 200.0)))
+  }
+
+  test("umbralConveniente: con un solo candidato devuelve ese") {
+    assert(umbralConveniente(s, 1.0, List(64)) == 64)
+  }
+
+  test("umbralConveniente: sin candidatos devuelve el tamaño de un sistema pequeño") {
+    assert(umbralConveniente(s, 1.0, Nil) == 2)
+  }
+
+
 }

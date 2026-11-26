@@ -48,9 +48,7 @@ graph TD
     C --> G["[6,8) secuencial"]
 ```
 
-
-
-
+---
 
 ## 2. Tabla de tiempos
 
@@ -64,7 +62,7 @@ graph TD
 - **Sistema:** generado con `Array.tabulate`, con posición $(i,\ i \bmod 100)$, velocidad $(i \bmod 7,\ i \bmod 13)$ y masa $1 + (i \bmod 5)$.
 - **Tamaños:** 1 000 000, 2 000 000 y 4 000 000 de partículas.
 - **Umbrales:** 1 000, 10 000, 100 000, $n/2$ y $n$.
-- **Calentamiento.** Cada medición usa `withWarmer(new Warmer.Default)` de ScalaMeter, que ejecuta el bloque repetidamente antes de medir para que la JVM se estabilice (compilación JIT, carga de clases). Aun así, el control ($u = n$) varió entre 0,34 y 2,36 entre corridas. Aunque el calentamiento reduce el efecto del arranque de la JVM, no elimina otras fuentes de variación: el recolector de basura, que se activa en momentos distintos porque cada paso crea arreglos de millones de objetos, la frecuencia variable de la CPU de un portátil y los procesos en segundo plano. Por eso los tiempos individuales varían entre corridas y las aceleraciones deben leerse con cautela.
+- **Calentamiento.** Cada medición usa `withWarmer(new Warmer.Default)` de ScalaMeter, que ejecuta el bloque repetidamente antes de medir para que la JVM se estabilice (compilación JIT, carga de clases). Aun así, el control ($u = n$) varió entre 0,34 y 2,36 entre corridas (ver tabla 2.4). Aunque el calentamiento reduce el efecto del arranque de la JVM, no elimina otras fuentes de variación: el recolector de basura, que probablemente se activa en momentos distintos porque cada paso crea arreglos de millones de objetos, la frecuencia variable de la CPU de un portátil y los procesos en segundo plano. Por eso los tiempos individuales varían entre corridas y las aceleraciones deben leerse con cautela.
 
 La aceleración se calcula como:
 
@@ -117,11 +115,10 @@ El control varió entre 0,34 y 2,36 aunque el código es idéntico al secuencial
 
 - **Umbrales pequeños** (1 000 y 10 000): en 2M quedaron muy por debajo de 1 (0,37 y 0,43), y en 4M dieron 0,85 y 1,08. En las cinco corridas casi nunca ganaron de forma estable.
 - **Tamaños de 2M y 4M:** la aceleración con $u = n/2$ no fue estable (0,64 en 2M y 1,60 en 4M).
-- **Tamaño de 1M:** todas las filas, incluido el control, dieron más de 1, lo que indica que el secuencial salió inflado en esa corrida.
+- **Tamaño de 1M:** todas las filas, incluido el control, dieron más de 1, lo que indica que el secuencial probablemente salió inflado en esa corrida.
 - **Ninguna aceleración se acercó a 6** (núcleos físicos) **ni a 12** (hilos).
 
-
-
+---
 
 ## 3. Comparación con la estimación del punto 4
 
@@ -141,7 +138,7 @@ Como la versión secuencial hace $n$ operaciones, la aceleración estimada es:
 
 $$S_{est} = \frac{n}{T_{est}}$$
 
-Se usa $p = 12$, que es lo que reporta `availableProcessors`. Son 12 hilos sobre 6 núcleos físicos, así que el modelo es optimista.
+Se usa $p = 12$, que es lo que reporta `availableProcessors`. Son 12 hilos sobre 6 núcleos físicos, así que el modelo es optimista. En la sección 4.3 se calcula la fracción no repartida con ambos valores.
 
 ### 3.2 Estimado frente a medido
 
@@ -181,13 +178,13 @@ La aceleración medida sale de la tabla 2.2. Las filas de control son $u = n$.
 
 - **Sin reparto no hay ganancia.** Con $u = n$ el modelo da $S_{est} = 0{,}92$ y lo medido quedó entre 1,02 y 1,47. En ambos casos no hay una mejora real.
 - **Ninguna aceleración supera el número de procesadores.** La estimada llega a 11,96 y la medida a 2,34, ambas por debajo de 12.
-- **Partir una sola vez ($u = n/2$) da poca ganancia.** El modelo estima 1,71. Lo medido en 4M fue 1,60, bastante cercano, aunque en 2M fue 0,64, así que no se mantiene.
+- **Partir una sola vez ($u = n/2$) da poca ganancia.** El modelo estima 1,71. Lo medido fue 1,60 en 4M, bastante cercano; 2,34 en 1M, aunque ese tamaño es poco confiable porque su control dio 1,47; y 0,64 en 2M. No se mantiene entre tamaños.
 
 ### 3.4 En qué no se parecen
 
 | Aspecto | Lo que dice el modelo | Lo que se midió |
 |---|---|---|
-| Umbral pequeño | Es el mejor: $S_{est}$ entre 11,86 y 11,96 con $u = 1\,000$ | Es de los peores: 0,37 en 2M y 0,85 en 4M |
+| Umbral pequeño | Es el mejor: $S_{est}$ entre 11,86 y 11,96 con $u = 1\,000$ | Casi siempre de los peores: 0,37 en 2M y 0,85 en 4M (en 1M dio 1,46, pero ese tamaño es poco confiable) |
 | Magnitud | Cercana a $p$ para umbrales pequeños | Máxima de 2,34, lejos de 6 y de 12 |
 | Tendencia con $u$ | $S_{est}$ baja siempre al crecer $u$ | Sin tendencia clara: sube y baja entre filas |
 | Control | $S_{est} = 0{,}92$ | Cerca de 1 en 2M y 4M, y 1,47 en 1M |
@@ -202,9 +199,77 @@ El modelo solo cuenta una operación por partícula. No incluye:
 1. **La creación de objetos.** Cada paso construye un arreglo nuevo de millones de `Particula`, y ese costo domina sobre el cálculo, que es una suma y un producto por partícula.
 2. **Las copias de `slice` y `++`** en `pasoParalelo`, que la versión secuencial no hace. Con umbrales pequeños se hacen muchas más copias.
 3. **El costo de crear y sincronizar tareas** con `parallel`, que crece con el número de tramos.
-4. **El recolector de basura**, que probablemente trabaja más con tantos arreglos intermedios. Es la causa más probable de la variabilidad del control (tabla 2.4), aunque no la medimos directamente.
+4. **El recolector de basura**, que trabaja más con tantos arreglos intermedios. Es la causa más probable de la variabilidad del control (tabla 2.4), aunque no la medimos directamente.
 5. **El ancho de banda de la memoria**, que comparten todos los núcleos.
 6. **Los hilos lógicos.** Los 12 procesadores del modelo son 6 núcleos físicos con Hyper-Threading, que no rinden como 12 núcleos independientes.
 7. **El entorno.** Un portátil puede bajar la frecuencia por temperatura, lo que explica parte de la variación entre corridas.
 
-Aunque cada medición usa `withWarmer(new Warmer.Default)`, el calentamiento solo cubre el arranque de la JVM y no elimina estas fuentes de variación. Por eso la aceleración medida queda muy por debajo de la estimada y el umbral más pequeño, que el modelo prefiere, resultó de los peores. Como el control varió entre 0,34 y 2,36, las diferencias pequeñas entre filas pueden ser ruido.
+Aunque cada medición usa `withWarmer(new Warmer.Default)`, el calentamiento solo cubre el arranque de la JVM y no elimina estas fuentes de variación. Por eso la aceleración medida queda muy por debajo de la estimada y el umbral más pequeño, que el modelo prefiere, resultó de los peores en 2M y 4M. Como el control varió entre 0,34 y 2,36 (tabla 2.4), las diferencias pequeñas entre filas pueden ser ruido.
+
+---
+
+## 4. Lectura de los resultados
+
+Esta sección interpreta la tabla 2.2, la variabilidad de la tabla 2.4 y la comparación de la sección 3.
+
+### 4.1 Umbral conveniente
+
+En la corrida de la tabla 2.2 se observa lo siguiente:
+
+- **$n = 1\,000\,000$:** la mayor aceleración fue $S = 2{,}34$ con $u = 500\,000$. Pero en este tamaño todas las filas, incluido el control, dieron más de 1 (el control dio 1,47). El secuencial de esa corrida probablemente quedó inflado, así que estos valores son poco confiables.
+- **$n = 2\,000\,000$:** ningún umbral superó al secuencial. El mejor fue $u = n/2$ con $S = 0{,}64$, mientras que el control dio 1,02.
+- **$n = 4\,000\,000$:** el mejor fue $u = 2\,000\,000$ ($n/2$), con $S = 1{,}60$. El control dio 1,03.
+
+No podemos declarar un umbral conveniente con seguridad, porque el control (que debería dar 1) varió entre 0,34 y 2,36 entre corridas (tabla 2.4). Una diferencia de esa magnitud entre dos filas puede ser ruido y no efecto del reparto. Lo que sí se sostiene en todas las corridas es lo siguiente:
+
+- **Umbrales muy pequeños** (1 000 y 10 000): casi nunca ganan de forma estable. Crean muchas tareas, y cada una cuesta crearla, sincronizarla y copiar tramos con `slice` y `++`, de modo que el reparto cuesta más de lo que ahorra. En 2M dieron 0,37 y 0,43.
+- **Umbrales grandes** (partir pocas veces, como $n/2$): tienen poco costo de reparto y fueron los que mejor resultado dieron en 1M y 4M (2,34 y 1,60), aunque no fueron estables (0,64 en 2M).
+- **Umbral $u = n$:** no reparte nada y es el control.
+
+Por eso el criterio práctico es un umbral grande, que parta pocas veces. Esto es contrario al modelo del punto 4, que prefería el umbral más pequeño. `umbralConveniente` aplica el mismo criterio de medir y escoger el más rápido, pero con este ruido su resultado también puede cambiar entre ejecuciones.
+
+### 4.2 Por qué la aceleración deja de crecer
+
+Aunque se agreguen núcleos, la aceleración tiene un techo, porque una parte del cálculo no se reparte o no escala. En este taller esa parte incluye:
+
+- la creación de los objetos `Particula` y de los arreglos nuevos;
+- la concatenación `++` y las copias de `slice`;
+- el recolector de basura;
+- el ancho de banda de la memoria, que comparten todos los núcleos;
+- el costo de crear y esperar las tareas.
+
+Además, cada paso hace muy poco cálculo por partícula (una suma y un producto), así que el movimiento de memoria pesa más que el cálculo mismo. Esto lo describe la ley de Amdahl. Si $f$ es la fracción del cálculo que no se reparte, la aceleración con $p$ procesadores es:
+
+$$S(p) = \frac{1}{f + \frac{1-f}{p}}$$
+
+y, por más procesadores que se agreguen, nunca supera:
+
+$$S_{\max} = \lim_{p \to \infty} S(p) = \frac{1}{f}$$
+
+### 4.3 Fracción del cálculo que no se reparte
+
+Despejando $f$ de la ley de Amdahl:
+
+$$f = \frac{\frac{1}{S} - \frac{1}{p}}{1 - \frac{1}{p}}$$
+
+Tomamos como referencia la mejor aceleración de la tabla 2.2 en un tamaño donde el control quedó cerca de 1: $n = 4\,000\,000$, $u = 2\,000\,000$, con $S = 1{,}60$.
+
+Con $p = 6$ (los núcleos físicos, porque los 12 hilos no rinden como 12 núcleos independientes):
+
+$$f = \frac{\frac{1}{1{,}60} - \frac{1}{6}}{1 - \frac{1}{6}} = \frac{0{,}625 - 0{,}1667}{0{,}8333} \approx 0{,}55$$
+
+Es decir, cerca del 55 % del cálculo no se reparte, y el techo teórico sería $\frac{1}{f} \approx 1{,}8$.
+
+Con $p = 12$ (los hilos que reporta `availableProcessors`):
+
+$$f = \frac{0{,}625 - 0{,}0833}{1 - 0{,}0833} = \frac{0{,}5417}{0{,}9167} \approx 0{,}59$$
+
+es decir, cerca del 59 %, con un techo de $\frac{1}{f} \approx 1{,}7$.
+
+Hay que tomar estos valores solo como una referencia aproximada, por dos razones: $S$ viene de una sola medición ruidosa, y con $u = n/2$ el sistema se parte en apenas dos tramos, así que esa corrida no usa más de dos hilos de trabajo y parte de la fracción "no repartida" se debe al umbral y no solo al problema. Lo que sí indican todos los datos es que la fracción efectivamente repartida es pequeña, porque en ninguna corrida la aceleración se acercó a 6 ni a 12.
+
+### 4.4 Conclusión
+
+El reparto con `parallel` es correcto, porque produce los mismos resultados que la versión secuencial, pero en este problema rindió poco. El cálculo por partícula es tan liviano que el costo de crear objetos, copiar arreglos y recolectar basura domina. Los umbrales pequeños, que el modelo del punto 4 prefería, resultaron de los peores, y los umbrales grandes (partir pocas veces) fueron los más convenientes, con aceleraciones típicas entre 1 y 1,6 (el máximo de 2,34 en 1M es poco confiable).
+
+La medición tuvo mucho ruido: el control, que debería dar 1, varió entre 0,34 y 2,36 entre corridas, a pesar de usar `withWarmer(new Warmer.Default)`. Atribuimos esa variación, como causa probable y no medida directamente, al recolector de basura, a la frecuencia variable de la CPU de un portátil y a los procesos en segundo plano. Por eso las cifras individuales son una referencia y no un valor exacto, y lo confiable es la tendencia: repartir en tramos pequeños no conviene aquí, y el techo de la aceleración queda muy por debajo del número de núcleos.

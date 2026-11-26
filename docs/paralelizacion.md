@@ -125,7 +125,7 @@ El control varió entre 0,34 y 2,36 aunque el código es idéntico al secuencial
 
 ## 3. Comparación con la estimación del punto 4
 
-El punto 4 del taller estima el costo de repartir el cálculo sin ejecutar nada. Aquí se contrasta esa estimación con lo que midió `App.scala`.
+El punto 4 del taller estima el costo del reparto sin ejecutar nada. Aquí se contrasta esa estimación con lo medido en la tabla 2.2.
 
 ### 3.1 Qué estima el modelo
 
@@ -137,56 +137,74 @@ $$\text{profundidad}(n, u) = \begin{cases} n & \text{si } n \le u \\ 1 + \text{p
 
 $$T_{est}(n, p, u) = \frac{n}{p} + \text{profundidad}(n, u)$$
 
-- El **trabajo** es una operación por partícula y no baja por repartir.
-- La **profundidad** cuenta las veces que se parte el sistema a la mitad, más el tramo que queda sin partir.
-- El **tiempo estimado** es la profundidad más el trabajo repartido entre los $p$ procesadores.
-
 Como la versión secuencial hace $n$ operaciones, la aceleración estimada es:
 
 $$S_{est} = \frac{n}{T_{est}}$$
 
-### 3.2 Números estimados
+Se usa $p = 12$, que es lo que reporta `availableProcessors`. Son 12 hilos sobre 6 núcleos físicos, así que el modelo es optimista.
 
-Sistema de $n = 1\,000\,000$ partículas y $p = ▢$ núcleos (los que imprime `App.scala`). Los valores de la tabla usan $p = 4$ como ejemplo.
+### 3.2 Estimado frente a medido
 
-| Umbral $u$ | Particiones | Tramo final | Profundidad | $T_{est}$ | $S_{est}$ | $S$ medida |
-|---:|---:|---:|---:|---:|---:|---:|
-| 1 000 | 10 | 976 | 986 | 250 986 | 3,98 | ▢ |
-| 10 000 | 7 | 7 812 | 7 819 | 257 819 | 3,88 | ▢ |
-| 100 000 | 4 | 62 500 | 62 504 | 312 504 | 3,20 | ▢ |
-| 250 000 | 2 | 250 000 | 250 002 | 500 002 | 2,00 | ▢ |
-| 1 000 000 (control) | 0 | 1 000 000 | 1 000 000 | 1 250 000 | 0,80 | ▢ (debe dar ≈ 1) |
+La aceleración medida sale de la tabla 2.2. Las filas de control son $u = n$.
 
-> Si la máquina no tiene 4 núcleos, cambie $p$ y recalcule la columna $T_{est}$. La profundidad no cambia, solo $\frac{n}{p}$.
+**$n = 1\,000\,000$**
+
+| Umbral $u$ | Profundidad | $T_{est}$ | $S_{est}$ | $S$ medida |
+|---:|---:|---:|---:|---:|
+| 1 000 | 986 | 84 319 | 11,86 | 1,46 |
+| 10 000 | 7 819 | 91 152 | 10,97 | 1,92 |
+| 100 000 | 62 504 | 145 837 | 6,86 | 1,83 |
+| 500 000 | 500 001 | 583 334 | 1,71 | 2,34 |
+| 1 000 000 (control) | 1 000 000 | 1 083 333 | 0,92 | 1,47 |
+
+**$n = 2\,000\,000$**
+
+| Umbral $u$ | Profundidad | $T_{est}$ | $S_{est}$ | $S$ medida |
+|---:|---:|---:|---:|---:|
+| 1 000 | 987 | 167 654 | 11,93 | 0,37 |
+| 10 000 | 7 820 | 174 487 | 11,46 | 0,43 |
+| 100 000 | 62 505 | 229 172 | 8,73 | 0,47 |
+| 1 000 000 | 1 000 001 | 1 166 668 | 1,71 | 0,64 |
+| 2 000 000 (control) | 2 000 000 | 2 166 667 | 0,92 | 1,02 |
+
+**$n = 4\,000\,000$**
+
+| Umbral $u$ | Profundidad | $T_{est}$ | $S_{est}$ | $S$ medida |
+|---:|---:|---:|---:|---:|
+| 1 000 | 988 | 334 321 | 11,96 | 0,85 |
+| 10 000 | 7 821 | 341 154 | 11,72 | 1,08 |
+| 100 000 | 62 506 | 395 839 | 10,11 | 1,00 |
+| 2 000 000 | 2 000 001 | 2 333 334 | 1,71 | 1,60 |
+| 4 000 000 (control) | 4 000 000 | 4 333 333 | 0,92 | 1,03 |
 
 ### 3.3 En qué se parecen
 
-▢ Completar con los números medidos. Ideas para escribirlo en sus palabras:
-
-- Tanto el modelo como la medición muestran que la aceleración **baja cuando el umbral crece**.
-- Con el umbral igual al tamaño del sistema no se reparte nada y **no hay ganancia**.
-- La aceleración, estimada o medida, **nunca supera el número de núcleos**.
+- **Sin reparto no hay ganancia.** Con $u = n$ el modelo da $S_{est} = 0{,}92$ y lo medido quedó entre 1,02 y 1,47. En ambos casos no hay una mejora real.
+- **Ninguna aceleración supera el número de procesadores.** La estimada llega a 11,96 y la medida a 2,34, ambas por debajo de 12.
+- **Partir una sola vez ($u = n/2$) da poca ganancia.** El modelo estima 1,71. Lo medido en 4M fue 1,60, bastante cercano, aunque en 2M fue 0,64, así que no se mantiene.
 
 ### 3.4 En qué no se parecen
 
-▢ Completar con los números medidos. Diferencias esperables:
-
-| Aspecto | Lo que dice el modelo | Lo que se espera medir |
+| Aspecto | Lo que dice el modelo | Lo que se midió |
 |---|---|---|
-| Umbral pequeño | Mientras más pequeño, mejor ($S_{est}$ máxima con $u = 1\,000$) | Un umbral demasiado pequeño crea demasiadas tareas y el reparto cuesta más de lo que ahorra |
-| Fila de control | $S_{est} = 0{,}8 < 1$, porque suma el tramo sin partir además de $\frac{n}{p}$ | $S \approx 1$, porque no se reparte nada y ambas versiones hacen lo mismo |
-| Unidades | Números sin unidad, que cuentan operaciones | Milisegundos |
-| Magnitud de la aceleración | Casi $p$ para umbrales pequeños | Menor que $p$ |
+| Umbral pequeño | Es el mejor: $S_{est}$ entre 11,86 y 11,96 con $u = 1\,000$ | Es de los peores: 0,37 en 2M y 0,85 en 4M |
+| Magnitud | Cercana a $p$ para umbrales pequeños | Máxima de 2,34, lejos de 6 y de 12 |
+| Tendencia con $u$ | $S_{est}$ baja siempre al crecer $u$ | Sin tendencia clara: sube y baja entre filas |
+| Control | $S_{est} = 0{,}92$ | Cerca de 1 en 2M y 4M, y 1,47 en 1M |
+| Unidades | Operaciones, sin unidad de tiempo | Milisegundos |
+
+El control del modelo da 0,92 y no 1 porque la profundidad suma el tramo sin partir ($n$) a $\frac{n}{p}$, mientras que en la ejecución real ambas versiones son el mismo código.
 
 ### 3.5 A qué lo atribuimos
 
-El modelo solo cuenta operaciones por partícula. No incluye:
+El modelo solo cuenta una operación por partícula. No incluye:
 
-1. **El costo de crear y sincronizar tareas** con `parallel`.
-2. **Las copias de arreglos** que hacen `slice` y `++` en `pasoParalelo`, que son trabajo que la versión secuencial no hace.
-3. **El recolector de basura**, que trabaja más cuando se crean muchos arreglos intermedios.
-4. **El ancho de banda de la memoria**, que comparten todos los núcleos.
-5. **El calentamiento de la JVM**, que afecta las primeras ejecuciones.
+1. **La creación de objetos.** Cada paso construye un arreglo nuevo de millones de `Particula`, y ese costo domina sobre el cálculo, que es una suma y un producto por partícula.
+2. **Las copias de `slice` y `++`** en `pasoParalelo`, que la versión secuencial no hace. Con umbrales pequeños se hacen muchas más copias.
+3. **El costo de crear y sincronizar tareas** con `parallel`, que crece con el número de tramos.
+4. **El recolector de basura**, que probablemente trabaja más con tantos arreglos intermedios. Es la causa más probable de la variabilidad del control (tabla 2.4), aunque no la medimos directamente.
+5. **El ancho de banda de la memoria**, que comparten todos los núcleos.
+6. **Los hilos lógicos.** Los 12 procesadores del modelo son 6 núcleos físicos con Hyper-Threading, que no rinden como 12 núcleos independientes.
+7. **El entorno.** Un portátil puede bajar la frecuencia por temperatura, lo que explica parte de la variación entre corridas.
 
-Estos costos explican por qué la aceleración medida queda por debajo de la estimada y por qué el umbral más pequeño no resulta el mejor.
-
+Aunque cada medición usa `withWarmer(new Warmer.Default)`, el calentamiento solo cubre el arranque de la JVM y no elimina estas fuentes de variación. Por eso la aceleración medida queda muy por debajo de la estimada y el umbral más pequeño, que el modelo prefiere, resultó de los peores. Como el control varió entre 0,34 y 2,36, las diferencias pequeñas entre filas pueden ser ruido.

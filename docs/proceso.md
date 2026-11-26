@@ -512,5 +512,128 @@ El promedio simple de los dos centros sería $(1.9167,\; 1.0833)$, que no coinci
 
 ----------
 
+## 6. Punto 4: trabajo y profundidad
+
+Estas funciones estiman el costo sin ejecutar nada.
+
+### 6.1. Función `trabajo`
+
+Código completo:
+
+scala
+
+```scala
+def trabajo(n: Int): Int = {
+  n
+}
+```
+
+El trabajo es el número total de operaciones, una por partícula. No baja por repartirlo: partir el sistema en tramos no elimina ninguna operación.
+
+**Traza:** `trabajo(1024)` devuelve `1024`.
+
+### 6.2. Función `profundidad`
+
+La profundidad es el número de veces que se parte a la mitad hasta llegar al umbral, más el trabajo del tramo que queda sin partir.
+
+$$\text{profundidad}(n, u) =  
+\begin{cases}  
+n & \text{si } n \le u \\  
+1 + \text{profundidad}\left(\lfloor n/2 \rfloor,\, u\right) & \text{si } n > u  
+\end{cases}$$
+
+Código completo:
+
+scala
+
+```scala
+def profundidad(n: Int, umbral: Int): Int = {
+  if (n <= umbral) n
+  else 1 + profundidad(n / 2, umbral)
+}
+```
+
+**Proceso:**
+
+1.  Si el tamaño ya no supera el umbral, no se parte más y se cuenta el trabajo del tramo: `n`.
+2.  Si lo supera, se cuenta una partición (`1`) y se repite el cálculo con la mitad del tamaño.
+
+**Traza con `profundidad(16, 2)`:**
+
+text
+
+```text
++--------------------+----+----------+-----------------------+
+| Llamado            | n  | ¿n <= 2? | Resultado             |
++--------------------+----+----------+-----------------------+
+| profundidad(16, 2) | 16 | No       | 1 + profundidad(8, 2) |
+| profundidad(8, 2)  | 8  | No       | 1 + profundidad(4, 2) |
+| profundidad(4, 2)  | 4  | No       | 1 + profundidad(2, 2) |
+| profundidad(2, 2)  | 2  | Sí       | 2                     |
++--------------------+----+----------+-----------------------+
+```
+
+Resultado: $1 + 1 + 1 + 2 = 5$ (tres particiones y un tramo de dos elementos).
+
+**Los ejemplos del enunciado:**
+
+text
+
+```text
++-------------------------+-------------+-------------+-----------+
+| Llamado                 | Particiones | Tramo final | Resultado |
++-------------------------+-------------+-------------+-----------+
+| profundidad(1024, 1024) | 0           | 1024        | 1024      |
+| profundidad(1024, 512)  | 1           | 512         | 513       |
+| profundidad(1024, 1)    | 10          | 1           | 11        |
++-------------------------+-------------+-------------+-----------+
+```
+
+**Observaciones:**
+
+-   Se asume un umbral mayor o igual que 1.
+-   La función usa la división entera `n / 2`. Cuando `n` no es potencia de dos, `pasoParalelo` deja el elemento sobrante en la mitad derecha, que es un elemento más larga que la izquierda. Por eso para esos tamaños la profundidad estimada puede quedar una partición por debajo de la real. Con el sistema de cinco partículas y umbral 2, `profundidad(5, 2)` da $1 + 2 = 3$, mientras que el camino más largo del árbol de la sección 3.4 (A → C → E) tiene dos particiones y un tramo de dos elementos, es decir 4. Para tamaños potencia de dos, la estimación es exacta.
+
+### 6.3. Función `tiempoEstimado`
+
+El tiempo estimado es la profundidad más el trabajo repartido entre `p` procesadores.
+
+$$T(n, p, u) = \text{profundidad}(n, u) + \frac{n}{p}$$
+
+Código completo:
+
+scala
+
+```scala
+def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = {
+  n.toDouble / p + profundidad(n, umbral)
+}
+```
+
+**Proceso:**
+
+1.  Se convierte `n` a `Double` para que la división no sea entera.
+2.  Se divide entre el número de procesadores `p`.
+3.  Se suma la profundidad.
+
+**Traza con `tiempoEstimado(1024, 4, 1)`:**
+
+text
+
+```text
++------+-----------------------------+-----------+
+| Paso | Operación                   | Resultado |
++------+-----------------------------+-----------+
+| 1    | n.toDouble / p = 1024.0 / 4 | 256.0     |
+| 2    | profundidad(1024, 1)        | 11        |
+| 3    | Suma                        | 267.0     |
++------+-----------------------------+-----------+
+```
+
+Otro ejemplo: `tiempoEstimado(16, 2, 2)` = $16.0/2 + 5 = 13.0$.
+
+----------
+
+
 
 

@@ -331,5 +331,186 @@ def masaTotal(s: Sistema): Double = {
 
 Con el sistema vacío, el resultado es `0.0`.
 
+### 4.3. Función `centroDeMasaSecuencial`
+
+El centro de masa es la suma de las posiciones ponderadas por la masa, dividida entre la masa total. Si la masa total es cero, es el origen.
+
+$$C = \frac{\sum_i m_i\, r_i}{\sum_i m_i}$$
+
+Código completo:
+
+scala
+
+```scala
+def centroDeMasaSecuencial(s: Sistema): Vector2 = {
+  if (masaTotal(s) == 0) Vector2(0.0, 0.0)
+  else s.map(p => p.pos * p.masa).reduce(_ + _) * (1 / masaTotal(s))
+}
+```
+
+**Proceso:**
+
+1.  Se calcula la masa total. Si es cero, se devuelve el origen `Vector2(0.0, 0.0)`.
+2.  Si no es cero, se multiplica la posición de cada partícula por su masa.
+3.  Se combinan todos esos vectores con `reduce(_ + _)`. Esta rama solo se alcanza con masa total distinta de cero, por lo que el arreglo no está vacío y `reduce` es seguro.
+4.  El vector obtenido se multiplica por $1/\text{masa total}$.
+
+**Traza con `centroDeMasaSecuencial(s)`:**
+
+text
+
+```text
++-----------+----------+------+-----------------+
+| Partícula | Posición | Masa | Posición * masa |
++-----------+----------+------+-----------------+
+| P1        | (0, 0)   | 1.0  | (0, 0)          |
+| P2        | (1, 0)   | 2.0  | (2, 0)          |
+| P3        | (2, 2)   | 1.0  | (2, 2)          |
+| P4        | (3, 1)   | 3.0  | (9, 3)          |
+| P5        | (4, 4)   | 2.0  | (8, 8)          |
++-----------+----------+------+-----------------+
+```
+
+Suma ponderada: $(0+2+2+9+8,\; 0+0+2+3+8) = (21, 13)$.
+
+Masa total: $9.0$.
+
+$$C = (21, 13) \cdot \frac{1}{9} \approx (2.3333,\; 1.4444)$$
+
+Con el ejemplo del enunciado, `Array(Particula((0,0),(3,4),2.0), Particula((4,0),(0,0),2.0))`, la suma ponderada es $(0,0) + (8,0) = (8,0)$, la masa total es $4$ y el resultado es $(2.0, 0.0)$.
+
+----------
+
+## 5. Punto 3: las mismas magnitudes en paralelo
+
+### 5.1. Función `energiaParalela`
+
+Tiene la misma estructura de reparto que `pasoParalelo`, pero cada llamado devuelve un `Double` y los resultados parciales se combinan con la suma.
+
+Código completo:
+
+scala
+
+```scala
+def energiaParalela(s: Sistema, umbral: Int): Double = {
+  if (s.length <= umbral || umbral <= 0) energiaSecuencial(s)
+  else {
+    val mitad = s.length / 2
+    val (izq, dech) = parallel(
+      energiaParalela(s.slice(0, mitad), umbral),
+      energiaParalela(s.slice(mitad, s.length), umbral)
+    )
+    izq + dech
+  }
+}
+```
+
+**Proceso:**
+
+1.  Si el tramo tiene como máximo `umbral` elementos (o `umbral <= 0`), se resuelve con `energiaSecuencial`.
+2.  Si no, se parte por la mitad y `parallel` calcula la energía de cada mitad al mismo tiempo.
+3.  Se suman las dos energías parciales.
+
+**Traza con `energiaParalela(s, 2)`:**
+
+text
+
+```text
++---------+------------+-------------------+-----------------+
+| Llamado | Tramo      | Acción            | Resultado       |
++---------+------------+-------------------+-----------------+
+| A       | P1–P5      | Parte en B y C    | B + C           |
+| B       | P1, P2     | energiaSecuencial | 2.5 + 1.0 = 3.5 |
+| C       | P3, P4, P5 | Parte en D y E    | D + E           |
+| D       | P3         | energiaSecuencial | 0.5             |
+| E       | P4, P5     | energiaSecuencial | 3.0 + 0.0 = 3.0 |
++---------+------------+-------------------+-----------------+
+```
+
+Combinación: C = $0.5 + 3.0 = 3.5$ y A = $3.5 + 3.5 = 7.0$, igual que la versión secuencial.
+
+Al sumar en otro orden, el resultado en punto flotante puede diferir de la versión secuencial en el último dígito. Por eso las pruebas usan tolerancia.
+
+### 5.2. Función `centroDeMasaParalelo`
+
+El centro de masa no se puede repartir promediando los centros de cada mitad. Para combinar dos mitades hay que llevar, de cada una, la **suma ponderada** y la **masa**. La división se hace una sola vez al final.
+
+Código completo (la función auxiliar se define dentro):
+
+scala
+
+```scala
+def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = {
+  def auxiliar(sub: Sistema): (Vector2, Double) = {
+    if (sub.length <= umbral || umbral <= 0) {
+      val m = masaTotal(sub)
+      val sumaPonderada =
+        if (m == 0) Vector2(0.0, 0.0) else centroDeMasaSecuencial(sub) * m
+      (sumaPonderada, m)
+    } else {
+      val mitad = sub.length / 2
+      val ((vecIzq, masaIzq), (vecDech, masaDech)) = parallel(
+        auxiliar(sub.slice(0, mitad)),
+        auxiliar(sub.slice(mitad, sub.length))
+      )
+      (vecIzq + vecDech, masaIzq + masaDech)
+    }
+  }
+
+  val (sumaTotal, masaTot) = auxiliar(s)
+  if (masaTot == 0) Vector2(0.0, 0.0) else sumaTotal * (1 / masaTot)
+}
+```
+
+**Proceso:**
+
+1.  `auxiliar` devuelve una pareja `(suma ponderada, masa)` para cada tramo.
+2.  En el caso base (tramo de a lo sumo `umbral` elementos) se calcula la masa del tramo y su suma ponderada. La suma ponderada se obtiene multiplicando el centro de masa local por la masa local; las dos operaciones se compensan y se recupera $\sum m_i r_i$ del tramo. Si la masa es cero, la suma ponderada es el origen.
+3.  En el caso recursivo se parte el tramo por la mitad y `parallel` calcula las dos parejas al mismo tiempo.
+4.  Las parejas se combinan sumando componente a componente: suma de las sumas ponderadas y suma de las masas.
+5.  En `centroDeMasaParalelo`, con la pareja total, se divide una sola vez: `sumaTotal * (1 / masaTot)`. Si la masa total es cero, se devuelve el origen.
+
+**Traza con `centroDeMasaParalelo(s, 2)`:**
+
+El árbol de llamados es el mismo de la sección 3.4.
+
+text
+
+```text
++---------+------------------+---------------------------------------+
+| Llamado | Tramo            | Resultado (suma ponderada, masa)      |
++---------+------------------+---------------------------------------+
+| B       | P1, P2           | ((2, 0), 3.0)                         |
+| D       | P3               | ((2, 2), 1.0)                         |
+| E       | P4, P5           | ((17, 11), 5.0)                       |
+| C       | D y E combinados | ((2+17, 2+11), 1+5) = ((19, 13), 6.0) |
+| A       | B y C combinados | ((2+19, 0+13), 3+6) = ((21, 13), 9.0) |
++---------+------------------+---------------------------------------+
+```
+
+Detalle del caso base para B: la masa es $1 + 2 = 3$. El centro local es $(2, 0) \cdot \tfrac{1}{3}$ y al multiplicarlo por la masa 3 se recupera la suma ponderada $(2, 0)$.
+
+División final, una sola vez:
+
+$$(21, 13) \cdot \frac{1}{9} \approx (2.3333,\; 1.4444)$$
+
+Es el mismo resultado de `centroDeMasaSecuencial(s)`.
+
+**Por qué no se promedian los promedios:**
+
+Los centros de masa locales de las dos mitades son:
+
+-   Mitad B (P1, P2), masa 3: $(\tfrac{2}{3}, 0) \approx (0.6667, 0)$.
+-   Mitad C (P3, P4, P5), masa 6: $(\tfrac{19}{6}, \tfrac{13}{6}) \approx (3.1667, 2.1667)$.
+
+El promedio simple de los dos centros sería $(1.9167,\; 1.0833)$, que no coincide con $(2.3333,\; 1.4444)$. Las dos mitades no pesan igual: C pesa el doble que B. Llevar la suma ponderada y la masa evita ese error, porque ambas se combinan con la suma.
+
+**Casos particulares:**
+
+-   Sistema vacío o con masa total cero: el resultado es el origen `Vector2(0.0, 0.0)`.
+-   Con `umbral <= 0` no se parte y todo se resuelve en el caso base.
+
+----------
+
 
 

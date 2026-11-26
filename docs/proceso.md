@@ -633,7 +633,160 @@ text
 Otro ejemplo: `tiempoEstimado(16, 2, 2)` = $16.0/2 + 5 = 13.0$.
 
 ----------
+## 7. Punto 5: medir la aceleración
 
+### 7.1. Función `medir`
+
+La función `medir` viene en el repositorio. Mide el tiempo de un bloque con ScalaMeter y devuelve la mediana de varias mediciones, en milisegundos.
+
+Código completo:
+
+scala
+
+```scala
+def medir[A](repeticiones: Int)(cuerpo: => A): Double = {
+  val muestras = Vector.fill(repeticiones) {
+    (withWarmer(new Warmer.Default) measure { cuerpo }).value
+  }
+  muestras.sorted.apply(muestras.length / 2)
+}
+```
+
+**Proceso:**
+
+1.  `Vector.fill(repeticiones) { ... }` evalúa el bloque `repeticiones` veces y reúne los resultados en un vector.
+2.  En cada repetición, `withWarmer(new Warmer.Default) measure { cuerpo }` ejecuta el bloque hasta que la máquina virtual se estabiliza y solo entonces mide. `.value` obtiene el tiempo en milisegundos.
+3.  Las muestras se ordenan de menor a mayor.
+4.  Se devuelve el elemento del medio (índice `length / 2`), es decir, la mediana.
+
+El parámetro `cuerpo` es por nombre (`=> A`): no se evalúa al llamar a `medir`, sino cada vez que ScalaMeter ejecuta el bloque.
+
+**Traza con `medir(3)(...)` y tiempos hipotéticos:**
+
+text
+
+```text
++--------------------+------------------+
+| Paso               | Valor            |
++--------------------+------------------+
+| Muestras obtenidas | 12.4, 11.8, 12.9 |
+| Muestras ordenadas | 11.8, 12.4, 12.9 |
+| Índice 3 / 2       | 1                |
+| Resultado          | 12.4             |
++--------------------+------------------+
+```
+
+La mediana evita que una muestra atípica distorsione el resultado.
+
+### 7.2. Función `aceleracion`
+
+La aceleración es el cociente entre el tiempo secuencial y el paralelo.
+
+$$S = \frac{T_{\text{sec}}}{T_{\text{par}}}$$
+
+Código completo:
+
+scala
+
+```scala
+def aceleracion(tSecuencial: Double, tParalelo: Double): Double = {
+  tSecuencial / tParalelo
+}
+```
+
+**Traza:**
+
+text
+
+```text
++---------------------------+---------------+-----------+
+| Llamado                   | Operación     | Resultado |
++---------------------------+---------------+-----------+
+| aceleracion(100.0, 25.0)  | 100.0 / 25.0  | 4.0       |
+| aceleracion(100.0, 100.0) | 100.0 / 100.0 | 1.0       |
++---------------------------+---------------+-----------+
+```
+
+Un valor mayor que 1 indica que la versión paralela es más rápida. Un valor igual a 1 indica que ambas tardan lo mismo.
+
+### 7.3. Función `umbralConveniente`
+
+Recibe una lista de umbrales candidatos, mide `pasoParalelo` con cada uno y devuelve el que menos tarda. Con la lista vacía, devuelve el tamaño del sistema, que equivale a no repartir.
+
+Código completo:
+
+scala
+
+```scala
+def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int = {
+  if (umbrales.isEmpty) s.length
+  else umbrales.minBy(u => medir(3)(pasoParalelo(s, dt, u)))
+}
+```
+
+**Proceso:**
+
+1.  Si la lista está vacía, se devuelve `s.length`.
+2.  Si no, para cada umbral candidato `u` se mide `pasoParalelo(s, dt, u)` con `medir(3)`, que da el tiempo mediano de tres mediciones.
+3.  `minBy` devuelve el umbral cuyo tiempo medido es el menor. Si dos umbrales empatan, devuelve el primero de la lista.
+
+**Traza con `umbrales = List(1000, 10000, 100000)` y tiempos hipotéticos (solo para ilustrar):**
+
+text
+
+```text
++--------+--------------------+
+| Umbral | Tiempo medido (ms) |
++--------+--------------------+
+| 1000   | 12.0               |
+| 10000  | 9.5                |
+| 100000 | 11.0               |
++--------+--------------------+
+```
+
+El menor es 9.5 ms, por lo que `umbralConveniente` devuelve `10000`. Con `umbrales = List()` devuelve `s.length`.
+
+### 7.4. Programa `App.scala`
+
+`App.scala` compara `pasoSecuencial` con `pasoParalelo` en sistemas grandes y reporta la aceleración de cada umbral.
+
+**Proceso:**
+
+1.  Se crea la simulación y se fijan `dt = 0.5` y `repeticiones = 3`.
+2.  Se imprime el número de núcleos disponibles con `Runtime.getRuntime.availableProcessors`.
+3.  Para cada tamaño `n` de la lista `1000000`, `2000000` y `4000000`, se construye el sistema con `Array.tabulate`, **fuera** de la medición, de modo que el tiempo de crearlo no se cuenta.
+4.  Se mide `pasoSecuencial(sistema, dt)` con `medir(repeticiones)`.
+5.  Para cada umbral de la lista `1000`, `10000`, `100000`, `n / 2` y `n`, se mide `pasoParalelo(sistema, dt, u)` y se imprime el tiempo paralelo y la aceleración `aceleracion(tSec, tPar)`.
+
+La partícula de índice `i` se genera así:
+
+-   Posición: $(i,\; i \bmod 100)$.
+-   Velocidad: $(i \bmod 7,\; i \bmod 13)$.
+-   Masa: $1 + (i \bmod 5)$.
+
+Por ejemplo, las partículas de índice 0, 1 y 2 son `Particula((0,0),(0,0),1.0)`, `Particula((1,1),(1,1),2.0)` y `Particula((2,2),(2,2),3.0)`.
+
+**Cómo se reparte el sistema para $n = 1\,000\,000$:**
+
+text
+
+```text
++----------------+-----------------------------------+------------------------+--------------------------------+------------------------+
+| Umbral         | Particiones (llamados que parten) | Tramos finales (hojas) | Tamaño aproximado de cada hoja | profundidad(n, umbral) |
++----------------+-----------------------------------+------------------------+--------------------------------+------------------------+
+| 1000           | 1023                              | 1024                   | 977                            | 986                    |
+| 10000          | 127                               | 128                    | 7813                           | 7819                   |
+| 100000         | 15                                | 16                     | 62 500                         | 62 504                 |
+| 500000 (n / 2) | 1                                 | 2                      | 500 000                        | 500 001                |
+| 1000000 (n)    | 0                                 | 1                      | 1 000 000                      | 1 000 000              |
++----------------+-----------------------------------+------------------------+--------------------------------+------------------------+
+```
+
+La última fila es el caso de control: con el umbral igual al tamaño del sistema no se reparte nada. `pasoParalelo` llama directamente a `pasoSecuencial(s, dt)` sobre el arreglo completo, o sea, hace la misma operación que la versión secuencial. Por eso la aceleración de esa fila debe dar 1.
+
+Las tablas con los tiempos medidos se presentan en el informe de paralelización.
+
+----------
 
 
 

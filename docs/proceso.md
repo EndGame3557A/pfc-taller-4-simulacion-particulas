@@ -264,5 +264,72 @@ Cada llamado que parte el tramo crea copias con `slice` y un arreglo nuevo con `
 
 ----------
 
+## 4. Punto 2: magnitudes globales en secuencial
+
+### 4.1. Función `energiaSecuencial`
+
+La energía cinética del sistema es la suma de $\tfrac{1}{2} m v^2$ de cada partícula, donde $v$ es la norma de su velocidad.
+
+$$E = \sum_{i} \frac{1}{2}\, m_i \,\lVert v_i \rVert^2$$
+
+Código completo:
+
+scala
+
+```scala
+def energiaSecuencial(s: Sistema): Double = {
+  s.map(p => 0.5 * p.masa * math.pow(p.vel.norma, 2)).sum
+}
+```
+
+**Proceso:**
+
+1.  Para cada partícula se calcula la norma de su velocidad.
+2.  Se eleva la norma al cuadrado y se multiplica por la masa y por 0.5.
+3.  Se suman todas las energías individuales.
+
+**Traza con `energiaSecuencial(s)`:**
+
+text
+
+```text
++-----------+-----------+---------+---------+---------------------+
+| Partícula | Velocidad | Norma   | Norma^2 | Energía (1/2)*m*v^2 |
++-----------+-----------+---------+---------+---------------------+
+| P1        | (1, 2)    | raiz(5) | 5       | 0.5 * 1 * 5 = 2.5   |
+| P2        | (0, 1)    | 1       | 1       | 0.5 * 2 * 1 = 1.0   |
+| P3        | (1, 0)    | 1       | 1       | 0.5 * 1 * 1 = 0.5   |
+| P4        | (-1, 1)   | raiz(2) | 2       | 0.5 * 3 * 2 = 3.0   |
+| P5        | (0, 0)    | 0       | 0       | 0.5 * 2 * 0 = 0.0   |
++-----------+-----------+---------+---------+---------------------+
+```
+
+Suma: $2.5 + 1.0 + 0.5 + 3.0 + 0.0 = 7.0$.
+
+La norma se calcula con una raíz cuadrada y luego se eleva al cuadrado, por lo que el valor puede diferir del exacto en un error de punto flotante muy pequeño. Por eso las pruebas comparan con tolerancia.
+
+Con el sistema vacío, la suma es `0.0`.
+
+### 4.2. Función `masaTotal`
+
+Código completo:
+
+scala
+
+```scala
+def masaTotal(s: Sistema): Double = {
+  s.map(p => p.masa).sum
+}
+```
+
+**Proceso:**
+
+1.  Se extrae la masa de cada partícula.
+2.  Se suman las masas.
+
+**Traza con `masaTotal(s)`:** $1.0 + 2.0 + 1.0 + 3.0 + 2.0 = 9.0$.
+
+Con el sistema vacío, el resultado es `0.0`.
+
 
 

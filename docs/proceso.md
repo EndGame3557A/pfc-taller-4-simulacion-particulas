@@ -874,3 +874,46 @@ sequenceDiagram
 ```
 
 ----------
+
+## 9. El resultado no depende del umbral
+
+Las versiones paralelas devuelven lo mismo que las secuenciales para cualquier umbral. Esto se debe a dos propiedades de la forma en que se reparte y combina.
+
+**El reparto no pierde ni repite partículas.** Un tramo de longitud $n$ se parte en `[0, mitad)` y `[mitad, n)`, con `mitad = n / 2`. Los dos tramos no comparten posiciones y entre los dos cubren todas las posiciones del tramo original. Como esto se cumple en cada nivel de la recursión, cada partícula termina en exactamente una hoja del árbol.
+
+**La combinación respeta el orden o es asociativa.** En `pasoParalelo`, `izquierda ++ derecha` conserva el orden original. En `energiaParalela` y en `centroDeMasaParalelo` los resultados parciales se combinan con sumas (de números y de vectores), que son asociativas. Por eso no importa cómo quede agrupado el árbol: el resultado es el mismo que sumar de corrido.
+
+El promedio, en cambio, no es una operación que se pueda combinar directamente. Por eso en el centro de masa se llevan la suma ponderada y la masa, que sí se combinan con sumas.
+
+Con números de punto flotante, la suma en otro orden puede cambiar el último dígito. Por eso las pruebas comparan con una tolerancia pequeña.
+
+----------
+
+## 10. Uso de programación funcional
+
+En la implementación se evitan las variables mutables, los ciclos `for` y `while` y el uso de `return`. Las operaciones principales son:
+
+-   `map`: transforma cada partícula (`mover`, energía, posición por masa).
+-   `slice`: extrae un tramo del arreglo sin modificar el original.
+-   `sum`: suma energías y masas.
+-   `reduce`: combina los vectores ponderados en una sola suma.
+-   `++`: concatena los resultados parciales de `pasoParalelo` en orden.
+-   `parallel`: ejecuta dos cálculos a la vez en el reparto recursivo.
+-   `Vector.fill`: repite una medición sin usar un ciclo.
+-   `minBy`: elige el umbral con menor tiempo medido.
+-   Recursión: reemplaza a los ciclos en `pasoParalelo`, `energiaParalela`, `auxiliar` y `profundidad`.
+-   Desestructuración de parejas con `val (a, b) = ...`: recibe los resultados de `parallel`.
+
+Todas las funciones trabajan sobre datos inmutables: cada paso produce un arreglo o valor nuevo sin modificar el sistema original.
+
+----------
+
+## 11. Conclusiones
+
+El desarrollo permitió implementar la simulación de un sistema de partículas y las magnitudes globales de energía, masa y centro de masa, tanto en secuencial como repartidas con `parallel`.
+
+El reparto sigue siempre el mismo esquema: se parte el tramo por la mitad mientras supere el umbral, se resuelven las dos mitades al mismo tiempo y se combinan los resultados parciales. En `pasoParalelo` la combinación es la concatenación en orden; en `energiaParalela` es la suma; en `centroDeMasaParalelo` es la suma de parejas `(suma ponderada, masa)` con una única división al final, porque los promedios no se pueden promediar.
+
+Las funciones de trabajo, profundidad y tiempo estimado permiten anticipar el costo del reparto sin ejecutar nada. La profundidad crece con el número de particiones y el trabajo del tramo que queda sin partir, y por eso un umbral demasiado grande deja trabajo sin repartir mientras que uno demasiado pequeño aumenta las particiones y las copias.
+
+Finalmente, `medir`, `aceleracion` y `umbralConveniente` junto con `App.scala` permiten comparar las versiones con ScalaMeter. La fila de control, con el umbral igual al tamaño del sistema, garantiza que la comparación mide el costo del reparto y no una diferencia entre dos operaciones distintas.

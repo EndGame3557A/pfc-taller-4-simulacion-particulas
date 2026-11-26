@@ -788,5 +788,89 @@ Las tablas con los tiempos medidos se presentan en el informe de paralelización
 
 ----------
 
+## 8. Diagramas del proceso
 
+### 8.1. Flujo general
 
+El siguiente diagrama muestra cómo se relacionan las funciones del taller.
+
+```mermaid
+flowchart TD
+    S["Sistema de partículas"] --> P1["Punto 1: avanzar un paso"]
+    S --> P2["Punto 2: magnitudes secuenciales"]
+    S --> P3["Punto 3: magnitudes paralelas"]
+    P1 --> M["mover"]
+    P1 --> PS["pasoSecuencial / pasoSegmento"]
+    P1 --> PP["pasoParalelo"]
+    P2 --> E["energiaSecuencial"]
+    P2 --> C["centroDeMasaSecuencial"]
+    P2 --> MT["masaTotal"]
+    P3 --> EP["energiaParalela"]
+    P3 --> CP["centroDeMasaParalelo"]
+    PS --> P5["Punto 5: medir con ScalaMeter"]
+    PP --> P5
+    P4["Punto 4: trabajo, profundidad y tiempo estimado"] --> CMP["Comparación con lo medido"]
+    P5 --> CMP
+
+```
+
+### 8.2. Árbol de llamados de `pasoParalelo`
+
+El diagrama muestra el reparto de la traza de la sección 3.4 (`n = 5`, `umbral = 2`).
+
+```mermaid
+flowchart TD
+    A["A: P1 a P5<br/>longitud 5 mayor que 2<br/>se parte en la mitad 2"]
+    B["B: P1, P2<br/>longitud 2<br/>pasoSecuencial"]
+    C["C: P3, P4, P5<br/>longitud 3 mayor que 2<br/>se parte en la mitad 1"]
+    D["D: P3<br/>longitud 1<br/>pasoSecuencial"]
+    E["E: P4, P5<br/>longitud 2<br/>pasoSecuencial"]
+    A -->|"parallel"| B
+    A -->|"parallel"| C
+    C -->|"parallel"| D
+    C -->|"parallel"| E
+
+```
+
+Los resultados se combinan de abajo hacia arriba con `++`: primero `D ++ E` en C y luego `B ++ C` en A.
+
+### 8.3. Combinación en `centroDeMasaParalelo`
+
+El diagrama muestra cómo suben las parejas `(suma ponderada, masa)` por el árbol y dónde se hace la única división.
+
+```mermaid
+flowchart BT
+    B["B: P1, P2<br/>(2, 0) y masa 3"] --> A
+    D["D: P3<br/>(2, 2) y masa 1"] --> C
+    E["E: P4, P5<br/>(17, 11) y masa 5"] --> C
+    C["C: suma de D y E<br/>(19, 13) y masa 6"] --> A
+    A["A: suma de B y C<br/>(21, 13) y masa 9"] --> R["División única:<br/>(21, 13) entre 9"]
+    R --> F["Centro de masa<br/>(2.3333, 1.4444)"]
+
+```
+
+### 8.4. Medición de un umbral
+
+El siguiente diagrama muestra qué ocurre cuando `umbralConveniente` evalúa un umbral candidato.
+
+```mermaid
+sequenceDiagram
+    participant U as umbralConveniente
+    participant M as medir
+    participant W as ScalaMeter
+    participant P as pasoParalelo
+
+    U->>M: medir(3) con el umbral u
+    loop Tres repeticiones
+        M->>W: withWarmer measure
+        W->>P: ejecuta el bloque hasta estabilizar
+        P-->>W: sistema avanzado
+        W-->>M: tiempo en ms
+    end
+    Note over M: ordena las muestras y toma la del medio
+    M-->>U: tiempo mediano para u
+    Note over U: minBy conserva el umbral de menor tiempo
+
+```
+
+----------

@@ -52,3 +52,48 @@ Para que un árbol de computación paralelo produzca el mismo resultado independ
     (\vec{R}_1, M_1) \oplus (\vec{R}_2, M_2) = (\vec{R}_1 + \vec{R}_2, M_1 + M_2)
     ```
   Dado que la suma vectorial en $\mathbb{R}^2$ y la suma escalar en $\mathbb{R}$ son asociativas componente a componente, $\oplus$ es asociativa con elemento neutro $(\vec{0}, 0.0)$.
+
+## 3. Corrección del Punto 1:Paso de la Simulación
+### 3.1. Especificación matemática
+Sea $\Delta t \in \mathbb{R}$ el intervalo de tiempo. La función de transición individual $f_{\text{mover}} : \text{Particula} \times \mathbb{R} \to \text{Particula}$ se especifica como:
+```math
+f_{\text{mover}}((\vec{r}, \vec{v}, m), \Delta t) = (\vec{r} + \vec{v} \cdot \Delta t, \vec{v}, m)
+```
+Para un sistema $S = [p_0, \ldots, p_{n-1}]$, el paso completo $F_{\text{paso}}(S, \Delta t)$ aplica $f_{\text{mover}}$ a cada partícula:
+```math
+F_{\text{paso}}(S, \Delta t) = [f_{\text{mover}}(p_0, \Delta t), \ldots, f_{\text{mover}}(p_{n-1}, \Delta t)]
+```
+### 3.2. Versiones secuenciales ($mover$, $pasoSecuencial$, $pasoSegmento$)
+- $mover(p, dt)$ construye directamente $Particula(p.pos + (p.vel * dt), p.vel, p.masa)$, lo cual coincide por definición con $f_{\text{mover}}(p, \Delta t)$.
+- $pasoSecuencial(s, dt)$ ejecuta $s.map(mover(_, dt))$. Por definición de la operación funcional $map$ sobre un arreglo de longitud $n$, transforma cada elemento $s(i)$ en $\text{mover}(s(i), dt)$ para todo $0 \leq i < n$, satisfaciendo $\text{pasoSecuencial}(S, \Delta t) = F_{\text{paso}}(S, \Delta t)$.
+- $pasoSegmento(s, dt, desde, hasta)$ ejecuta $s.slice(desde, hasta).map(mover(_, dt))$. El método $slice(desde, hasta)$ extrae exactamente el subarreglo $S[\text{desde} \dots \text{hasta})$, y $map$ aplica $f_{\text{mover}}$ a cada elemento de dicho tramo, cumpliendo:
+  ```math
+    \text{pasoSegmento}(S, \Delta t, a, b) = F_{\text{paso}}(S[a \dots b), \Delta t)
+    ```
+
+### 3.3. Versión paralela (`pasoParalelo`)
+Demostramos por inducción fuerte sobre la longitud $n = |S|$ que para todo arreglo $S$, todo $\Delta t \in \mathbb{R}$ y todo $\text{umbral} \in \mathbb{Z}$:
+```math
+\text{pasoParalelo}(S, \Delta t, \text{umbral}) = \text{pasoSecuencial}(S, \Delta t)
+```
+***Caso base:*** $\text{umbral} \leq 0 \lor n \leq \text{umbral}$.Por definición de la guarda `if (umbral <= 0 || s.length <= umbral)`, el programa evalúa directamente la rama secuencial:
+```math
+\text{pasoParalelo}(S, \Delta t, \text{umbral}) \rightarrow \text{pasoSecuencial}(S, \Delta t)
+```
+El caso base se cumple trivialmente.
+**Paso inductivo:** 
+Supongamos que $\text{umbral} > 0$ y $n > \text{umbral}$ (lo cual implica $n \geq 2$).
+Hipótesis de inducción (HI): Para todo sistema $S'$ con $|S'| < n$, se cumple $\text{pasoParalelo}(S', \Delta t, \text{umbral}) = \text{pasoSecuencial}(S', \Delta t)$.
+Al ejecutar `pasoParalelo(S, dt, umbral)`, se calcula $\text{mitad} = \lfloor n / 2 \rfloor$. Como $n \geq 2$, tenemos $1 \leq \text{mitad} < n$, de modo que $|S_{\text{izq}}| = \text{mitad} < n$ y $|S_{\text{der}}| = n - \text{mitad} < n$. Evaluando la expresión:
+```math
+\begin{aligned}
+\text{pasoParalelo}(S, \Delta t, \text{umbral}) &\rightarrow \text{pasoParalelo}(S_{\text{izq}}, \Delta t, \text{umbral}) \mathbin{++} \text{pasoParalelo}(S_{\text{der}}, \Delta t, \text{umbral}) \\
+&\stackrel{\text{HI}}{=} \text{pasoSecuencial}(S_{\text{izq}}, \Delta t) \mathbin{++} \text{pasoSecuencial}(S_{\text{der}}, \Delta t) \\
+&= F_{\text{paso}}(S_{\text{izq}}, \Delta t) \mathbin{++} F_{\text{paso}}(S_{\text{der}}, \Delta t)
+\end{aligned}
+```
+Por la propiedad de partición demostrada en la Sección 2.1 ($S_{\text{izq}} \mathbin{++} S_{\text{der}} = S$) y la distributividad de `map` respecto a la concatenación:
+```math
+F_{\text{paso}}(S_{\text{izq}}, \Delta t) \mathbin{++} F_{\text{paso}}(S_{\text{der}}, \Delta t) = F_{\text{paso}}(S_{\text{izq}} \mathbin{++} S_{\text{der}}, \Delta t) = F_{\text{paso}}(S, \Delta t) = \text{pasoSecuencial}(S, \Delta t)
+```
+Concluimos por inducción que `pasoParalelo` es correcto para cualquier entrada.

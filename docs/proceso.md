@@ -102,29 +102,167 @@ La partícula original no se modifica: se devuelve una partícula nueva.
 
 **Traza con `mover(P1, 2.0)`:**
 
-Paso
+text
 
-Operación
+```text
++------+--------------------------------------------+------------------------------------+
+| Paso | Operación                                  | Resultado                          |
++------+--------------------------------------------+------------------------------------+
+| 1    | vel * dt = (1, 2) * 2.0                    | (2.0, 4.0)                         |
+| 2    | pos + desplazamiento = (0, 0) + (2.0, 4.0) | (2.0, 4.0)                         |
+| 3    | Partícula nueva                            | Particula((2.0, 4.0), (1, 2), 1.0) |
++------+--------------------------------------------+------------------------------------+
+```
+### 3.2. Función `pasoSecuencial`
 
-Resultado
+La función `pasoSecuencial` avanza todo el sistema un paso de tiempo `dt`.
 
-1
+Código completo:
 
-`vel * dt` = (1, 2) · 2.0
+scala
 
-(2.0, 4.0)
+```scala
+def pasoSecuencial(s: Sistema, dt: Double): Sistema = {
+  s.map(mover(_, dt))
+}
+```
 
-2
+La expresión `mover(_, dt)` equivale a `p => mover(p, dt)`.
 
-`pos + desplazamiento` = (0, 0) + (2.0, 4.0)
+**Proceso:**
 
-(2.0, 4.0)
+1.  Se recorre el arreglo de izquierda a derecha.
+2.  A cada partícula se le aplica `mover` con el mismo `dt`.
+3.  Se construye un arreglo nuevo con los resultados, en el mismo orden y con la misma longitud.
 
-3
+**Traza con `pasoSecuencial(s, 2.0)`:**
 
-Partícula nueva
+text
 
-`Particula((2.0, 4.0), (1, 2), 1.0)`
+```text
++-----------+-------------------+----------+----------------+
+| Partícula | Posición anterior | vel * dt | Posición nueva |
++-----------+-------------------+----------+----------------+
+| P1        | (0, 0)            | (2, 4)   | (2, 4)         |
+| P2        | (1, 0)            | (0, 2)   | (1, 2)         |
+| P3        | (2, 2)            | (2, 0)   | (4, 2)         |
+| P4        | (3, 1)            | (-2, 2)  | (1, 3)         |
+| P5        | (4, 4)            | (0, 0)   | (4, 4)         |
++-----------+-------------------+----------+----------------+
+```
+
+Resultado: un arreglo con `P1'`, `P2'`, `P3'`, `P4'`, `P5'` en ese orden.
+
+**Casos particulares:**
+
+-   Con `dt = 0.0` todas las posiciones quedan igual.
+-   Con un sistema vacío el resultado es un arreglo vacío.
+-   El arreglo original no cambia.
+
+### 3.3. Función `pasoSegmento`
+
+La función `pasoSegmento` avanza solo el tramo entre `desde` (incluido) y `hasta` (excluido).
+
+Código completo:
+
+scala
+
+```scala
+def pasoSegmento(s: Sistema, dt: Double, desde: Int, hasta: Int): Sistema = {
+  s.slice(desde, hasta).map(mover(_, dt))
+}
+```
+
+**Proceso:**
+
+1.  `slice(desde, hasta)` copia las partículas de las posiciones $desde, desde+1, \dots, hasta-1$.
+2.  A cada partícula del tramo se le aplica `mover`.
+3.  Se devuelve un arreglo con solo el tramo, de longitud $hasta - desde$. No se devuelve el sistema completo.
+
+**Traza con `pasoSegmento(s, 2.0, 1, 4)`:**
+
+text
+
+```text
++------+------------------+---------------+
+| Paso | Operación        | Resultado     |
++------+------------------+---------------+
+| 1    | slice(1, 4)      | P2, P3, P4    |
+| 2    | mover a cada una | P2', P3', P4' |
++------+------------------+---------------+
+```
+
+Resultado: posiciones `(1, 2)`, `(4, 2)`, `(1, 3)`.
+
+Si el tramo es vacío (por ejemplo `desde = hasta`), `slice` devuelve un arreglo vacío y el resultado también lo es.
+
+### 3.4. Función `pasoParalelo`
+
+La función `pasoParalelo` avanza el sistema repartiendo el trabajo. Parte el arreglo por la mitad con `parallel` mientras el tramo tenga más elementos que el umbral. Por debajo de esa cifra resuelve en secuencial.
+
+Código completo:
+
+scala
+
+```scala
+def pasoParalelo(s: Sistema, dt: Double, umbral: Int): Sistema = {
+  if (umbral <= 0 || s.length <= umbral)
+    pasoSecuencial(s, dt)
+  else {
+    val mitad = s.length / 2
+    val (izquierda, derecha) = parallel(
+      pasoParalelo(s.slice(0, mitad), dt, umbral),
+      pasoParalelo(s.slice(mitad, s.length), dt, umbral))
+    izquierda ++ derecha
+  }
+}
+```
+
+**Proceso:**
+
+1.  Se evalúa el criterio de parada: si `umbral <= 0` o el tramo tiene como máximo `umbral` elementos, se resuelve con `pasoSecuencial`.
+2.  En caso contrario se calcula `mitad = s.length / 2`.
+3.  Se crean los dos tramos: `[0, mitad)` y `[mitad, s.length)`.
+4.  `parallel` ejecuta a la vez el llamado recursivo sobre cada tramo.
+5.  Cuando los dos terminan, se concatenan con `++`: primero la mitad izquierda y luego la derecha, de modo que el orden original se conserva.
+
+Cuando $umbral \ge 1$ y el tramo tiene más de `umbral` elementos, tiene al menos dos. Por eso `mitad` es al menos 1 y las dos mitades son no vacías y más cortas que el tramo original. Cada llamado trabaja sobre un arreglo estrictamente más corto, así que la recursión termina.
+
+**Traza con `pasoParalelo(s, 2.0, 2)`:**
+
+text
+
+```text
++---------+--------------------+----------+----------------+----------------------------------------------------+
+| Llamado | Tramo              | Longitud | ¿Longitud > 2? | Acción                                             |
++---------+--------------------+----------+----------------+----------------------------------------------------+
+| A       | P1, P2, P3, P4, P5 | 5        | Sí             | mitad = 2: se parte en B (P1, P2) y C (P3, P4, P5) |
+| B       | P1, P2             | 2        | No             | pasoSecuencial -> P1', P2'                         |
+| C       | P3, P4, P5         | 3        | Sí             | mitad = 1: se parte en D (P3) y E (P4, P5)         |
+| D       | P3                 | 1        | No             | pasoSecuencial -> P3'                              |
+| E       | P4, P5             | 2        | No             | pasoSecuencial -> P4', P5'                         |
++---------+--------------------+----------+----------------+----------------------------------------------------+
+```
+
+B y C se ejecutan en paralelo entre sí. Dentro de C, D y E también se ejecutan en paralelo.
+
+**Combinación de los resultados:**
+
+1.  C combina sus dos resultados: `D ++ E` = P3', P4', P5'.
+2.  A combina los suyos: `B ++ C` = P1', P2', P3', P4', P5'.
+
+El resultado coincide con el de `pasoSecuencial(s, 2.0)`: mismas partículas, en el mismo orden.
+
+**Casos particulares:**
+
+-   `umbral <= 0`: se resuelve todo en secuencial, sin partir.
+-   `umbral >= s.length`: no se reparte nada. Es el caso de control del punto 5, porque se llama a `pasoSecuencial(s, dt)` sin copiar el arreglo.
+-   `umbral = 1`: se parte hasta llegar a tramos de una sola partícula.
+-   `pasoParalelo(Array(p), 2.0, 1)` con una sola partícula no parte, porque $1 \le 1$.
+
+Cada llamado que parte el tramo crea copias con `slice` y un arreglo nuevo con `++`. Ese costo extra explica por qué un umbral demasiado pequeño no conviene (se retoma en el informe de paralelización).
+
+----------
 
 
 

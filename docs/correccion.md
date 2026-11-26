@@ -97,3 +97,88 @@ Por la propiedad de partición demostrada en la Sección 2.1 ($S_{\text{izq}} \m
 F_{\text{paso}}(S_{\text{izq}}, \Delta t) \mathbin{++} F_{\text{paso}}(S_{\text{der}}, \Delta t) = F_{\text{paso}}(S_{\text{izq}} \mathbin{++} S_{\text{der}}, \Delta t) = F_{\text{paso}}(S, \Delta t) = \text{pasoSecuencial}(S, \Delta t)
 ```
 Concluimos por inducción que `pasoParalelo` es correcto para cualquier entrada.
+
+## 4. Corrección de los Puntos 2 y 3: Magnitudes Globales
+### 4.1. Energía cinética (`energiaSecuencial` y `energiaParalela`)
+**Especificación matemática**
+La energía cinética total de un sistema $S = [p_0, \ldots, p_{n-1}]$ es:
+```math
+E(S) = \sum_{i=0}^{n-1} \frac{1}{2} m_i \|\vec{v}_i\|^2
+```
+donde $E([]) = 0.0$.
+
+#### Corrección secuencial
+`energiaSecuencial(s)` calcula `s.map(p => 0.5 * p.masa * math.pow(p.vel.norma, 2)).sum`. Dado que `p.vel.norma` implementa $\sqrt{v_x^2 + v_y^2}$, elevarlo al cuadrado produce $\|\vec{v}_i\|^2$. Al mapear cada partícula a su energía individual y aplicar `.sum` (cuyo neutro para arreglo vacío es 0.0), se obtiene exactamente $E(S)$.
+#### Corrección paralela
+Demostramos por inducción fuerte sobre $n = |S|$ que $\text{energiaParalela}(S, \text{umbral}) = E(S)$:
+- **Caso base ($n \leq \text{umbral} \lor \text{umbral} \leq 0$):** La función invoca `energiaSecuencial(s)`, que ya demostramos igual a $E(S)$.
+- **Paso inductivo ($n > \text{umbral} > 0$):** Asumiendo por HI que $\text{energiaParalela}(S', \text{umbral}) = E(S')$ para todo $|S'| < n$:
+    ```math
+    \begin{aligned}
+    \text{energiaParalela}(S, \text{umbral}) &= \text{energiaParalela}(S_{\text{izq}}, \text{umbral}) + \text{energiaParalela}(S_{\text{der}}, \text{umbral}) \\
+    &\stackrel{\text{HI}}{=} E(S_{\text{izq}}) + E(S_{\text{der}}) \\
+    &= \sum_{i=0}^{\text{mitad}-1} \frac{1}{2} m_i \|\vec{v}_i\|^2 + \sum_{i=\text{mitad}}^{n-1} \frac{1}{2} m_i \|\vec{v}_i\|^2 \\
+    &= \sum_{i=0}^{n-1} \frac{1}{2} m_i \|\vec{v}_i\|^2 = E(S)
+    \end{aligned}
+    ```
+
+### 4.2. Masa total y Centro de masa (`masaTotal`, `centroDeMasaSecuencial`, `centroDeMasaParalelo`)
+#### Especificación matemática
+La masa total $M(S)$ y el vector de posiciones ponderadas $\vec{R}(S)$ se definen como:
+```math
+M(S) = \sum_{i=0}^{n-1} m_i, \qquad \vec{R}(S) = \sum_{i=0}^{n-1} m_i \vec{r}_i
+```
+El centro de masa $\vec{C}(S)$ se define por partes:
+```math
+\vec{C}(S) = \begin{cases}
+(0.0, 0.0) & \text{si } M(S) = 0 \\
+\dfrac{1}{M(S)} \vec{R}(S) & \text{si } M(S) > 0
+\end{cases}
+```
+#### ¿Por qué la suma es válida para repartir y el promedio no lo es directamente?
+La operación de promedio ponderado no es asociativa ni distributiva respecto a la partición de un conjunto cuando los subconjuntos tienen masas distintas. Sean dos mitades $S_{\text{izq}}$ y $S_{\text{der}}$ con masas totales $M_1 = M(S_{\text{izq}})$ y $M_2 = M(S_{\text{der}})$, y centros de masa $\vec{C}_1 = \frac{\vec{R}_1}{M_1}$ y $\vec{C}_2 = \frac{\vec{R}_2}{M_2}$ (con $M_1, M_2 > 0$).
+
+Si intentáramos promediar directamente los centros parciales, obtendríamos:
+```math
+\frac{\vec{C}_1 + \vec{C}_2}{2} = \frac{1}{2}\left(\frac{\vec{R}_1}{M_1} + \frac{\vec{R}_2}{M_2}\right) \neq \frac{\vec{R}_1 + \vec{R}_2}{M_1 + M_2} = \vec{C}(S)
+```
+
+La igualdad solo se cumple en el caso particular en que $M_1 = M_2$. En general, dividir antes de tiempo pierde la información del peso relativo ($M_1$ frente a $M_2$) de cada mitad.
+Por el contrario, la suma ponderada $\vec{R}(S)$ y la masa total $M(S)$ son funciones lineales aditivas sobre particiones disjuntas:
+```math
+\vec{R}(S_{\text{izq}} \mathbin{++} S_{\text{der}}) = \vec{R}(S_{\text{izq}}) + \vec{R}(S_{\text{der}}), \qquad M(S_{\text{izq}} \mathbin{++} S_{\text{der}}) = M(S_{\text{izq}}) + M(S_{\text{der}})
+```
+Por lo tanto, es matemáticamente necesario propagar la tupla $(\vec{R}, M)$ en cada nodo del árbol de recursión y realizar una única división $\vec{R}(S) \cdot \frac{1}{M(S)}$ en la raíz al finalizar.
+
+#### Corrección de ``centroDeMasaSecuencial``
+1. ``masaTotal(s)`` calcula ``s.map(p => p.masa).sum``, que implementa directamente $M(S)$.
+2. Si ``masaTotal(s) == 0``, retorna ``Vector2(0.0, 0.0)``, cumpliendo el primer caso de la especificación.
+3. Si ``masaTotal(s) != 0`` (por lo tanto $n \geq 1$), calcula ``s.map(p => p.pos * p.masa).reduce(_ + _) * (1 / masaTotal(s))``, lo que corresponde exactamente a $\vec{R}(S) \cdot \frac{1}{M(S)} = \vec{C}(S)$.
+
+#### Corrección de ``centroDeMasaParalelo``
+La función utiliza una función auxiliar recursiva ``auxiliar(sub: Sistema): (Vector2, Double)``. Demostramos por inducción fuerte sobre $n = |sub|$ que:
+```math
+\text{auxiliar}(sub) = (\vec{R}(sub), M(sub))
+```
+
+- Caso base ($|sub| \leq \text{umbral} \lor \text{umbral} \leq 0$):
+Calcula $m = \text{masaTotal}(sub) = M(sub)$.
+  - Si $m = 0$, todas las partículas tienen masa $0$ (o $sub$ es vacío), por lo que $\vec{R}(sub) = (0.0, 0.0)$ y retorna ((0.0, 0.0), 0.0).
+  - Si $m \neq 0$, calcula ``centroDeMasaSecuencial(sub) * m``:
+      ```math
+      \vec{C}(sub) \cdot M(sub) = \left(\frac{1}{M(sub)} \vec{R}(sub)\right) \cdot M(sub) = \vec{R}(sub)
+      ```
+    Retorna $(\vec{R}(sub), M(sub))$.
+- Paso inductivo ($|sub| > \text{umbral} > 0$):
+  
+    Por hipótesis de inducción, las llamadas recursivas sobre $sub_{\text{izq}}$ y $sub_{\text{der}}$ retornan $(\vec{R}(sub_{\text{izq}}), M(sub_{\text{izq}}))$ y $(\vec{R}(sub_{\text{der}}), M(sub_{\text{der}}))$. Al combinarlas:
+    ```math
+    (\vec{R}(sub_{\text{izq}}) + \vec{R}(sub_{\text{der}}), M(sub_{\text{izq}}) + M(sub_{\text{der}})) = (\vec{R}(sub), M(sub))
+    ```
+- Resultado final en la raíz:
+
+    Al invocar ``auxiliar(s)``, se obtiene ``(sumaTotal, masaTot)`` $= (\vec{R}(S), M(S))$.
+
+    Finalmente, la guarda ``if (masaTot == 0) Vector2(0.0, 0.0) else sumaTotal * (1 / masaTot)`` aplica exactamente la definición de $\vec{C}(S)$, garantizando que $\text{centroDeMasaParalelo}(S, \text{umbral}) = \text{centroDeMasaSecuencial}(S)$.
+
+

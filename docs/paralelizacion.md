@@ -51,6 +51,77 @@ graph TD
 
 
 
+
+## 2. Tabla de tiempos
+
+### 2.1 Condiciones de la medición
+
+- **Máquina:** Intel Core i5-11400H, 16 GB de RAM (portátil).
+- **Núcleos disponibles:** 12 (`Runtime.getRuntime.availableProcessors`). Son 6 núcleos físicos con 2 hilos cada uno (Hyper-Threading).
+- **Herramienta:** ScalaMeter, con `withWarmer(new Warmer.Default)`.
+- **Repeticiones:** 3 por medición; se reporta la **mediana**, en milisegundos.
+- **Paso de tiempo:** $dt = 0{,}5$.
+- **Sistema:** generado con `Array.tabulate`, con posición $(i,\ i \bmod 100)$, velocidad $(i \bmod 7,\ i \bmod 13)$ y masa $1 + (i \bmod 5)$.
+- **Tamaños:** 1 000 000, 2 000 000 y 4 000 000 de partículas.
+- **Umbrales:** 1 000, 10 000, 100 000, $n/2$ y $n$.
+
+La aceleración se calcula como:
+
+$$S = \frac{T_{sec}}{T_{par}}$$
+
+### 2.2 Resultados
+
+Los datos son de una sola corrida completa de `App.scala`, sin mezclar filas de corridas distintas.
+
+| Tamaño $n$ | Umbral $u$ | $T_{sec}$ (ms) | $T_{par}$ (ms) | Aceleración $S$ | Nota |
+|---:|---:|---:|---:|---:|---|
+| 1 000 000 | 1 000 | 38,21 | 26,12 | 1,46 | |
+| 1 000 000 | 10 000 | 38,21 | 19,87 | 1,92 | |
+| 1 000 000 | 100 000 | 38,21 | 20,84 | 1,83 | |
+| 1 000 000 | 500 000 | 38,21 | 16,30 | 2,34 | |
+| 1 000 000 | 1 000 000 | 38,21 | 25,93 | 1,47 | control |
+| 2 000 000 | 1 000 | 65,39 | 178,26 | 0,37 | |
+| 2 000 000 | 10 000 | 65,39 | 150,71 | 0,43 | |
+| 2 000 000 | 100 000 | 65,39 | 139,29 | 0,47 | |
+| 2 000 000 | 1 000 000 | 65,39 | 102,96 | 0,64 | |
+| 2 000 000 | 2 000 000 | 65,39 | 63,94 | 1,02 | control |
+| 4 000 000 | 1 000 | 292,88 | 346,53 | 0,85 | |
+| 4 000 000 | 10 000 | 292,88 | 271,01 | 1,08 | |
+| 4 000 000 | 100 000 | 292,88 | 293,32 | 1,00 | |
+| 4 000 000 | 2 000 000 | 292,88 | 182,68 | 1,60 | |
+| 4 000 000 | 4 000 000 | 292,88 | 285,68 | 1,03 | control |
+
+### 2.3 Fila de control
+
+Cuando $u = n$, `pasoParalelo` no reparte nada y llama directamente a `pasoSecuencial`, así que ambas versiones hacen el mismo trabajo y la aceleración debe ser cercana a 1.
+
+- Con $n = 2\,000\,000$ y $n = 4\,000\,000$ el control dio $S = 1{,}02$ y $S = 1{,}03$, como se esperaba.
+- Con $n = 1\,000\,000$ dio $S = 1{,}47$. El secuencial de esa corrida (38,21 ms) quedó más alto que en otras corridas del mismo tamaño (entre 18 y 30 ms), así que atribuimos la desviación al ruido de la medición y no al reparto.
+
+Elegimos esta corrida como tabla principal porque dos de los tres controles quedaron cerca de 1. Las demás corridas se muestran en la siguiente sección.
+
+### 2.4 Variabilidad del control
+
+Se ejecutó `App.scala` cinco veces, sin cambiar el código. Estas son las aceleraciones del control ($u = n$) en cada corrida:
+
+| $n$ | Corrida 1 | Corrida 2 | Corrida 3 | Corrida 4 | Corrida 5 (tabla 2.2) |
+|---:|---:|---:|---:|---:|---:|
+| 1 000 000 | 1,86 | 0,99 | 1,03 | 0,86 | 1,47 |
+| 2 000 000 | 1,60 | 1,65 | 0,34 | 1,25 | 1,02 |
+| 4 000 000 | 1,59 | 1,16 | 0,40 | 2,36 | 1,03 |
+
+El control varió entre 0,34 y 2,36 aunque el código es idéntico al secuencial. Por eso las aceleraciones individuales de la tabla 2.2 deben leerse con cautela.
+
+### 2.5 Observaciones
+
+- **Umbrales pequeños** (1 000 y 10 000): en 2M quedaron muy por debajo de 1 (0,37 y 0,43), y en 4M dieron 0,85 y 1,08. En las cinco corridas casi nunca ganaron de forma estable.
+- **Tamaños de 2M y 4M:** la aceleración con $u = n/2$ no fue estable (0,64 en 2M y 1,60 en 4M).
+- **Tamaño de 1M:** todas las filas, incluido el control, dieron más de 1, lo que indica que el secuencial salió inflado en esa corrida.
+- **Ninguna aceleración se acercó a 6** (núcleos físicos) **ni a 12** (hilos).
+
+
+
+
 ## 3. Comparación con la estimación del punto 4
 
 El punto 4 del taller estima el costo de repartir el cálculo sin ejecutar nada. Aquí se contrasta esa estimación con lo que midió `App.scala`.

@@ -182,3 +182,28 @@ Calcula $m = \text{masaTotal}(sub) = M(sub)$.
     Finalmente, la guarda ``if (masaTot == 0) Vector2(0.0, 0.0) else sumaTotal * (1 / masaTot)`` aplica exactamente la definición de $\vec{C}(S)$, garantizando que $\text{centroDeMasaParalelo}(S, \text{umbral}) = \text{centroDeMasaSecuencial}(S)$.
 
 
+## 5. Corrección de los Puntos 4 y 5: Modelo de Costos y Medición
+### 5.1. Trabajo, profundidad y tiempo estimado
+- ``trabajo(n)``: Retorna $n$. Dado que cada partícula requiere un número constante de operaciones aritméticas independientes ($O(1)$), el trabajo total $W(n) = n$ es lineal respecto al tamaño del sistema.
+- ``profundidad(n, umbral)``: Modelamos la recurrencia del camino crítico $D(n, u)$:
+    ```math
+    D(n, u) = \begin{cases} 
+    n & \text{si } n \leq u \\
+    1 + D(\lfloor n/2 \rfloor, u) & \text{si } n > u
+    \end{cases}
+  ```
+  Como $n > u \geq 1 \implies \lfloor n/2 \rfloor < n$, la secuencia de argumentos es estrictamente decreciente y acotada inferiormente, garantizando la terminación en $\lceil \log_2(n/u) \rceil$ pasos recursivos más el costo secuencial del tramo hoja.
+- ``tiempoEstimado(n, p, umbral)``: Implementa directamente la cota superior del teorema de Brent para planificación sobre $p$ procesadores:
+
+    ```math
+    T_p(n, u) = \frac{W(n)}{p} + D(n, u) = \frac{n}{p} + \text{profundidad}(n, u)
+    ```
+### 5.2. Aceleración y selección de umbral
+``aceleracion(tSecuencial, tParalelo)``: Calcula el cociente de speedup definido por la ley de Amdahl:
+```math
+S_p = \frac{T_{\text{secuencial}}}{T_{\text{paralelo}}}
+```
+
+- ``umbralConveniente(s, dt, umbrales)``:
+  - Si ``umbrales.isEmpty``, retorna ``s.length`` (ejecución sin particiones, equivalente a secuencial), cumpliendo la especificación para listas vacías.
+  - En caso contrario, evalúa la función de costo $g(u) = \text{medir}(3)(\text{pasoParalelo}(s, dt, u))$ para cada $u \in \text{umbrales}$ y retorna $\arg\min_{u \in \text{umbrales}} g(u)$ mediante ``minBy``, garantizando la selección del umbral de menor tiempo medido.

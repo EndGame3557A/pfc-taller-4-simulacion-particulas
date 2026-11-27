@@ -782,7 +782,7 @@ text
 +----------------+-----------------------------------+------------------------+--------------------------------+------------------------+
 ```
 
-La última fila es el caso de control: con el umbral igual al tamaño del sistema no se reparte nada. `pasoParalelo` llama directamente a `pasoSecuencial(s, dt)` sobre el arreglo completo, o sea, hace la misma operación que la versión secuencial. Por eso la aceleración de esa fila debe dar 1.
+La última fila es el caso de control: con el umbral igual al tamaño del sistema no se reparte nada. `pasoParalelo` llama directamente a `pasoSecuencial(s, dt)` sobre el arreglo completo, o sea, hace la misma operación que la versión secuencial. Por eso la aceleración de esa fila debería dar 1. En las corridas reales varió por ruido de la medición, como se explica en el informe de paralelización.
 
 Las tablas con los tiempos medidos se presentan en el informe de paralelización.
 
@@ -914,6 +914,6 @@ El desarrollo permitió implementar la simulación de un sistema de partículas 
 
 El reparto sigue siempre el mismo esquema: se parte el tramo por la mitad mientras supere el umbral, se resuelven las dos mitades al mismo tiempo y se combinan los resultados parciales. En `pasoParalelo` la combinación es la concatenación en orden; en `energiaParalela` es la suma; en `centroDeMasaParalelo` es la suma de parejas `(suma ponderada, masa)` con una única división al final, porque los promedios no se pueden promediar.
 
-Las funciones de trabajo, profundidad y tiempo estimado permiten anticipar el costo del reparto sin ejecutar nada. La profundidad crece con el número de particiones y el trabajo del tramo que queda sin partir, y por eso un umbral demasiado grande deja trabajo sin repartir mientras que uno demasiado pequeño aumenta las particiones y las copias.
+Las funciones de trabajo, profundidad y tiempo estimado permiten anticipar el costo del reparto sin ejecutar nada. La profundidad crece con el número de particiones y el trabajo del tramo que queda sin partir, y por eso un umbral demasiado grande deja trabajo sin repartir mientras que uno demasiado pequeño aumenta las particiones y las copias. Cuando $n$ no es potencia de dos, la estimación puede quedar una partición por debajo de la real, como se vio con $n = 5$ y umbral 2.
 
-Finalmente, `medir`, `aceleracion` y `umbralConveniente` junto con `App.scala` permiten comparar las versiones con ScalaMeter. La fila de control, con el umbral igual al tamaño del sistema, garantiza que la comparación mide el costo del reparto y no una diferencia entre dos operaciones distintas.
+Finalmente, `medir`, `aceleracion` y `umbralConveniente` junto con `App.scala` permiten comparar las versiones con ScalaMeter. La fila de control, con el umbral igual al tamaño del sistema, garantiza que la comparación mide el costo del reparto y no una diferencia entre dos operaciones distintas. En las mediciones realizadas el control no dio siempre 1, sino que varió entre corridas por ruido de la máquina virtual, del recolector de basura y del equipo. Esto, junto con la comparación con la estimación y la lectura de los tiempos, se analiza en el informe de paralelización.

@@ -216,17 +216,17 @@ Esta sección interpreta la tabla 2.2, la variabilidad de la tabla 2.4 y la comp
 
 En la corrida de la tabla 2.2 se observa lo siguiente:
 
-- **$n = 1\,000\,000$:** la mayor aceleración fue $S = 2{,}34$ con $u = 500\,000$. Pero en este tamaño todas las filas, incluido el control, dieron más de 1 (el control dio 1,47). El secuencial de esa corrida probablemente quedó inflado, así que estos valores son poco confiables.
-- **$n = 2\,000\,000$:** ningún umbral superó al secuencial. El mejor fue $u = n/2$ con $S = 0{,}64$, mientras que el control dio 1,02.
-- **$n = 4\,000\,000$:** el mejor fue $u = 2\,000\,000$ ($n/2$), con $S = 1{,}60$. El control dio 1,03.
+- **$n = 1\,000\,000$:** la mejor aceleración fue 2,34 con $u = 500\,000$. Aun así, aquí todas las filas dieron más de 1, incluso el control (1,47). Probablemente el tiempo secuencial de esa corrida salió muy alto, así que estos valores no son muy confiables.
+- **$n = 2\,000\,000$:** ningún umbral le ganó al secuencial. El mejor fue $u = n/2$ con 0,64, mientras que el control dio 1,02.
+- **$n = 4\,000\,000$:** el mejor fue $u = 2\,000\,000$ ($n/2$) con 1,60. El control dio 1,03.
 
-No podemos declarar un umbral conveniente con seguridad, porque el control (que debería dar 1) varió entre 0,34 y 2,36 entre corridas (tabla 2.4). Una diferencia de esa magnitud entre dos filas puede ser ruido y no efecto del reparto. Lo que sí se sostiene en todas las corridas es lo siguiente:
+No podemos decir con seguridad cuál umbral es el mejor. El control debería dar 1, pero entre corridas varió entre 0,34 y 2,36 (tabla 2.4). Si el mismo código da resultados tan distintos, la diferencia entre dos umbrales puede ser ruido y no efecto del reparto.
 
-- **Umbrales muy pequeños** (1 000 y 10 000): casi nunca ganan de forma estable. Crean muchas tareas, y cada una cuesta crearla, sincronizarla y copiar tramos con `slice` y `++`, de modo que el reparto cuesta más de lo que ahorra. En 2M dieron 0,37 y 0,43.
-- **Umbrales grandes** (partir pocas veces, como $n/2$): tienen poco costo de reparto y fueron los que mejor resultado dieron en 1M y 4M (2,34 y 1,60), aunque no fueron estables (0,64 en 2M).
-- **Umbral $u = n$:** no reparte nada y es el control.
+- **Umbrales muy pequeños** (1 000 y 10 000): casi nunca superaron al secuencial. Con intervalos tan pequeños se crean muchas tareas, y cada una gasta tiempo en crearse, en esperar a las demás y en copiar su pedazo del arreglo con `slice` y `++`. Ese gasto pesa más que el cálculo, que es muy corto. En 2M las aceleraciones fueron 0,37 y 0,43, o sea que el paralelo tardó más del doble.
+- **Umbrales grandes** (partir pocas veces, como $n/2$): casi no gastan en repartir, y por eso dieron los mejores resultados en 1M y 4M (2,34 y 1,60). Aun así no son confiables: en 2M dieron 0,64.
+- **Umbral $u = n$:** no se parte nada, así que es el control.
 
-Por eso el criterio práctico es un umbral grande, que parta pocas veces. Esto es contrario al modelo del punto 4, que prefería el umbral más pequeño. `umbralConveniente` aplica el mismo criterio de medir y escoger el más rápido, pero con este ruido su resultado también puede cambiar entre ejecuciones.
+Con esto, lo más razonable es usar un umbral grande, que parta pocas veces. Esto es lo contrario de lo que decía el modelo del punto 4, que favorecía el umbral más pequeño. [Diga por qué creen que el modelo se equivoca: no cuenta el costo de crear tareas ni de copiar.]
 
 ### 4.2 Por qué la aceleración deja de crecer
 
@@ -238,11 +238,11 @@ Aunque se agreguen núcleos, la aceleración tiene un techo, porque una parte de
 - el ancho de banda de la memoria, que comparten todos los núcleos;
 - el costo de crear y esperar las tareas.
 
-Además, cada paso hace muy poco cálculo por partícula (una suma y un producto), así que el movimiento de memoria pesa más que el cálculo mismo. Esto lo describe la ley de Amdahl. Si $f$ es la fracción del cálculo que no se reparte, la aceleración con $p$ procesadores es:
+Además, cada partícula requiere muy poco cálculo (una suma y una multiplicación), así que mover datos en memoria cuesta más que calcular. Esto lo explica la ley de Amdahl: si $f$ es la fracción que no se reparte, la aceleración con $p$ procesadores es
 
 $$S(p) = \frac{1}{f + \frac{1-f}{p}}$$
 
-y, por más procesadores que se agreguen, nunca supera:
+y aunque $p$ crezca mucho, nunca pasa de
 
 $$S_{\max} = \lim_{p \to \infty} S(p) = \frac{1}{f}$$
 
@@ -270,6 +270,6 @@ Hay que tomar estos valores solo como una referencia aproximada, por dos razones
 
 ### 4.4 Conclusión
 
-El reparto con `parallel` es correcto, porque produce los mismos resultados que la versión secuencial, pero en este problema rindió poco. El cálculo por partícula es tan liviano que el costo de crear objetos, copiar arreglos y recolectar basura domina. Los umbrales pequeños, que el modelo del punto 4 prefería, resultaron de los peores, y los umbrales grandes (partir pocas veces) fueron los más convenientes, con aceleraciones típicas entre 1 y 1,6 (el máximo de 2,34 en 1M es poco confiable).
+El reparto con `parallel` es correcto, porque da los mismos resultados que la versión secuencial, pero en este problema rindió poco. El cálculo por partícula es tan liviano que el costo de crear objetos, copiar arreglos y recolectar basura domina. Los umbrales pequeños, que el modelo del punto 4 prefería, resultaron de los peores, y los umbrales grandes (partir pocas veces) fueron los más convenientes, con aceleraciones típicas entre 1 y 1,6 (el máximo de 2,34 en 1M es poco confiable).
 
 La medición tuvo mucho ruido: el control, que debería dar 1, varió entre 0,34 y 2,36 entre corridas, a pesar de usar `withWarmer(new Warmer.Default)`. Atribuimos esa variación, como causa probable y no medida directamente, al recolector de basura, a la frecuencia variable de la CPU de un portátil y a los procesos en segundo plano. Por eso las cifras individuales son una referencia y no un valor exacto, y lo confiable es la tendencia: repartir en tramos pequeños no conviene aquí, y el techo de la aceleración queda muy por debajo del número de núcleos.

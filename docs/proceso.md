@@ -79,7 +79,6 @@ Las funciones están definidas dentro de la clase `SimulacionParticulas`. Ademá
 
 La función `mover` calcula cómo queda una sola partícula después de un paso de tiempo. Las demás funciones de este punto se apoyan en ella.
 
-Código completo:
 
 ```scala
 def mover(p: Particula, dt: Double): Particula = {
@@ -102,7 +101,7 @@ La partícula original no se modifica: se devuelve una partícula nueva.
 
 **Traza con `mover(P1, 2.0)`:**
 
-text
+
 
 ```text
 +------+--------------------------------------------+------------------------------------+
@@ -117,9 +116,7 @@ text
 
 La función `pasoSecuencial` avanza todo el sistema un paso de tiempo `dt`.
 
-Código completo:
 
-scala
 
 ```scala
 def pasoSecuencial(s: Sistema, dt: Double): Sistema = {
@@ -137,7 +134,7 @@ La expresión `mover(_, dt)` equivale a `p => mover(p, dt)`.
 
 **Traza con `pasoSecuencial(s, 2.0)`:**
 
-text
+
 
 ```text
 +-----------+-------------------+----------+----------------+
@@ -163,9 +160,7 @@ Resultado: un arreglo con `P1'`, `P2'`, `P3'`, `P4'`, `P5'` en ese orden.
 
 La función `pasoSegmento` avanza solo el tramo entre `desde` (incluido) y `hasta` (excluido).
 
-Código completo:
 
-scala
 
 ```scala
 def pasoSegmento(s: Sistema, dt: Double, desde: Int, hasta: Int): Sistema = {
@@ -181,7 +176,7 @@ def pasoSegmento(s: Sistema, dt: Double, desde: Int, hasta: Int): Sistema = {
 
 **Traza con `pasoSegmento(s, 2.0, 1, 4)`:**
 
-text
+
 
 ```text
 +------+------------------+---------------+
@@ -200,9 +195,7 @@ Si el tramo es vacío (por ejemplo `desde = hasta`), `slice` devuelve un arreglo
 
 La función `pasoParalelo` avanza el sistema repartiendo el trabajo. Parte el arreglo por la mitad con `parallel` mientras el tramo tenga más elementos que el umbral. Por debajo de esa cifra resuelve en secuencial.
 
-Código completo:
 
-scala
 
 ```scala
 def pasoParalelo(s: Sistema, dt: Double, umbral: Int): Sistema = {
@@ -230,7 +223,6 @@ Cuando $umbral \ge 1$ y el tramo tiene más de `umbral` elementos, tiene al meno
 
 **Traza con `pasoParalelo(s, 2.0, 2)`:**
 
-text
 
 ```text
 +---------+--------------------+----------+----------------+----------------------------------------------------+
@@ -272,9 +264,7 @@ La energía cinética del sistema es la suma de $\tfrac{1}{2} m v^2$ de cada par
 
 $$E = \sum_{i} \frac{1}{2}\, m_i \,\lVert v_i \rVert^2$$
 
-Código completo:
 
-scala
 
 ```scala
 def energiaSecuencial(s: Sistema): Double = {
@@ -290,7 +280,6 @@ def energiaSecuencial(s: Sistema): Double = {
 
 **Traza con `energiaSecuencial(s)`:**
 
-text
 
 ```text
 +-----------+-----------+---------+---------+---------------------+
@@ -312,9 +301,7 @@ Con el sistema vacío, la suma es `0.0`.
 
 ### 4.2. Función `masaTotal`
 
-Código completo:
 
-scala
 
 ```scala
 def masaTotal(s: Sistema): Double = {
@@ -337,9 +324,7 @@ El centro de masa es la suma de las posiciones ponderadas por la masa, dividida 
 
 $$C = \frac{\sum_i m_i\, r_i}{\sum_i m_i}$$
 
-Código completo:
 
-scala
 
 ```scala
 def centroDeMasaSecuencial(s: Sistema): Vector2 = {
@@ -357,7 +342,6 @@ def centroDeMasaSecuencial(s: Sistema): Vector2 = {
 
 **Traza con `centroDeMasaSecuencial(s)`:**
 
-text
 
 ```text
 +-----------+----------+------+-----------------+
@@ -387,9 +371,7 @@ Con el ejemplo del enunciado, `Array(Particula((0,0),(3,4),2.0), Particula((4,0)
 
 Tiene la misma estructura de reparto que `pasoParalelo`, pero cada llamado devuelve un `Double` y los resultados parciales se combinan con la suma.
 
-Código completo:
 
-scala
 
 ```scala
 def energiaParalela(s: Sistema, umbral: Int): Double = {
@@ -413,7 +395,6 @@ def energiaParalela(s: Sistema, umbral: Int): Double = {
 
 **Traza con `energiaParalela(s, 2)`:**
 
-text
 
 ```text
 +---------+------------+-------------------+-----------------+
@@ -435,9 +416,7 @@ Al sumar en otro orden, el resultado en punto flotante puede diferir de la versi
 
 El centro de masa no se puede repartir promediando los centros de cada mitad. Para combinar dos mitades hay que llevar, de cada una, la **suma ponderada** y la **masa**. La división se hace una sola vez al final.
 
-Código completo (la función auxiliar se define dentro):
 
-scala
 
 ```scala
 def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = {
@@ -474,7 +453,7 @@ def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = {
 
 El árbol de llamados es el mismo de la sección 3.4.
 
-text
+
 
 ```text
 +---------+------------------+---------------------------------------+
@@ -518,9 +497,7 @@ Estas funciones estiman el costo sin ejecutar nada.
 
 ### 6.1. Función `trabajo`
 
-Código completo:
 
-scala
 
 ```scala
 def trabajo(n: Int): Int = {
@@ -542,9 +519,7 @@ n & \text{si } n \le u \\
 1 + \text{profundidad}\left(\lfloor n/2 \rfloor,\, u\right) & \text{si } n > u  
 \end{cases}$$
 
-Código completo:
 
-scala
 
 ```scala
 def profundidad(n: Int, umbral: Int): Int = {
@@ -560,7 +535,6 @@ def profundidad(n: Int, umbral: Int): Int = {
 
 **Traza con `profundidad(16, 2)`:**
 
-text
 
 ```text
 +--------------------+----+----------+-----------------------+
@@ -577,7 +551,6 @@ Resultado: $1 + 1 + 1 + 2 = 5$ (tres particiones y un tramo de dos elementos).
 
 **Los ejemplos del enunciado:**
 
-text
 
 ```text
 +-------------------------+-------------+-------------+-----------+
@@ -600,9 +573,7 @@ El tiempo estimado es la profundidad más el trabajo repartido entre `p` procesa
 
 $$T(n, p, u) = \text{profundidad}(n, u) + \frac{n}{p}$$
 
-Código completo:
 
-scala
 
 ```scala
 def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = {
@@ -618,7 +589,6 @@ def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = {
 
 **Traza con `tiempoEstimado(1024, 4, 1)`:**
 
-text
 
 ```text
 +------+-----------------------------+-----------+
@@ -639,9 +609,6 @@ Otro ejemplo: `tiempoEstimado(16, 2, 2)` = $16.0/2 + 5 = 13.0$.
 
 La función `medir` viene en el repositorio. Mide el tiempo de un bloque con ScalaMeter y devuelve la mediana de varias mediciones, en milisegundos.
 
-Código completo:
-
-scala
 
 ```scala
 def medir[A](repeticiones: Int)(cuerpo: => A): Double = {
@@ -663,7 +630,6 @@ El parámetro `cuerpo` es por nombre (`=> A`): no se evalúa al llamar a `medir`
 
 **Traza con `medir(3)(...)` y tiempos hipotéticos:**
 
-text
 
 ```text
 +--------------------+------------------+
@@ -684,9 +650,6 @@ La aceleración es el cociente entre el tiempo secuencial y el paralelo.
 
 $$S = \frac{T_{\text{sec}}}{T_{\text{par}}}$$
 
-Código completo:
-
-scala
 
 ```scala
 def aceleracion(tSecuencial: Double, tParalelo: Double): Double = {
@@ -696,7 +659,6 @@ def aceleracion(tSecuencial: Double, tParalelo: Double): Double = {
 
 **Traza:**
 
-text
 
 ```text
 +---------------------------+---------------+-----------+
@@ -713,9 +675,7 @@ Un valor mayor que 1 indica que la versión paralela es más rápida. Un valor i
 
 Recibe una lista de umbrales candidatos, mide `pasoParalelo` con cada uno y devuelve el que menos tarda. Con la lista vacía, devuelve el tamaño del sistema, que equivale a no repartir.
 
-Código completo:
 
-scala
 
 ```scala
 def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int = {
@@ -732,7 +692,6 @@ def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int = {
 
 **Traza con `umbrales = List(1000, 10000, 100000)` y tiempos hipotéticos (solo para ilustrar):**
 
-text
 
 ```text
 +--------+--------------------+
@@ -768,7 +727,6 @@ Por ejemplo, las partículas de índice 0, 1 y 2 son `Particula((0,0),(0,0),1.0)
 
 **Cómo se reparte el sistema para $n = 1\,000\,000$:**
 
-text
 
 ```text
 +----------------+-----------------------------------+------------------------+--------------------------------+------------------------+

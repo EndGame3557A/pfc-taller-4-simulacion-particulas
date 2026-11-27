@@ -122,7 +122,7 @@ class SimulacionParticulas {
 
   /** La profundidad más el trabajo entre p procesadores. */
   def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = {
-    n/p + profundidad(n,umbral)
+    n.toDouble / p + profundidad(n,umbral)
   }
 
   // Punto 5: medir la aceleración ---------------------------------------------

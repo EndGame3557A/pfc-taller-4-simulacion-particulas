@@ -1,279 +1,209 @@
-# Ejemplo de informe de corrección
+# Informe de Corrección — Simulación de Partículas en Paralelo
 
-Fundamentos de Programación Funcional y Concurrente.
-Documento realizado por el docente Juan Francisco Díaz.
+Fundamentos de Programación Funcional y Concurrente.  
+Taller 4: Simulación de partículas en paralelo.
 
-## 1. Argumentar la corrección de programas recursivos
+---
 
-Sea $f : A \to B$ una función, y $A$ un conjunto definido recursivamente
-(recordar la definición de Matemáticas Discretas I), como por ejemplo los
-naturales o las listas.
-
-Sea $P_f$ un programa recursivo (lineal o en árbol) desarrollado en Scala (o en
-cualquier lenguaje de programación) hecho para calcular $f$:
-
-```scala
-def Pf(a: A): B = { // Pf recibe a de tipo A, y devuelve f(a) de tipo B
-  ...
-}
+## 1. Modelo Matemático del Sistema
+Sea $\mathbb{V} = \mathbb{R}^2$ el espacio vectorial bidimensional de posiciones y velocidades. Una partícula se define como una tupla:
+```math
+p = (\vec{r}, \vec{v}, m) \in \mathbb{V} \times \mathbb{V} \times \mathbb{R}_{\geq 0}
 ```
-
-¿Cómo argumentar que $P_f(a)$ siempre devuelve $f(a)$ como respuesta? Es decir,
-¿cómo argumentar que $P_f$ es correcto con respecto a su especificación?
-
-La respuesta es sencilla: demostrando el siguiente teorema.
+donde $\vec{r} = (r_x, r_y)$ es la posición, $\vec{v} = (v_x, v_y)$ es la velocidad y $m$ es la masa. Un sistema de $n$ partículas se modela como una secuencia indexada (arreglo) de longitud $n$:
+```math
+S = [p_0, p_1, \ldots, p_{n-1}], \quad n = |S| \geq 0
+```
+Para todo tramo $S[a \dots b)$ con $0 \leq a \leq b \leq n$, denotamos el subarreglo de elementos desde el índice $a$ (incluido) hasta $b$ (excluido) como:
 
 ```math
-\forall a \in A : P_f(a) == f(a)
+S[a \dots b) = [p_a, p_{a+1}, \ldots, p_{b-1}]
 ```
 
-Cuando uno tiene que demostrar que algo se cumple para todos los elementos de
-un conjunto definido recursivamente, es natural usar inducción estructural. En
-términos prácticos, esto significa demostrar que:
-
-- Para cada valor básico $a$ de $A$, se tiene que $P_f(a) == f(a)$.
-- Para cada valor $a \in A$ construido recursivamente a partir de otro(s)
-  valor(es) $a' \in A$, se tiene que
-  $P_f(a') == f(a') \rightarrow P_f(a) == f(a)$. (Esta es la hipótesis de
-  inducción).
-
-### Ejemplo: factorial recursivo
-
-Sea $f : \mathbb{N} \to \mathbb{N}$ la función que calcula el factorial de un
-número natural, es decir, $f(n) = n!$. Y sea $P_f$ el siguiente programa en
-Scala:
-
-```scala
-def Pf(n: Int): Int = { // Pf recibe n de tipo Int, y devuelve n! de tipo Int
-  if (n == 0) 1 else n * Pf(n - 1)
-}
-```
-
-Vamos a demostrar que $\forall n \in \mathbb{N} : P_f(n) == n!$
-
-**Caso base:** $n = 0$
-
+## 2. Propiedades Estructurales del Reparto
+Antes de demostrar la corrección de cada función recursiva paralela, establecemos los dos invariantes fundamentales que garantizan la validez de la estrategia divide y vencerás sobre el arreglo.
+### 2.1. Partición sin pérdida ni repetición de partículas
+En las funciones $pasoParalelo$, $energiaParalela$ y $centroDeMasaParalelo$, cuando el tamaño del arreglo actual $S$ cumple $|S| = k > \text{umbral}$ (con $\text{umbral} \geq 1$, por lo tanto $k \geq 2$), se calcula el punto de corte entero:
 ```math
-P_f(0) \rightarrow \text{if } (0 == 0)\ 1 \text{ else } 0 \ast P_f(-1) \rightarrow 1
+\text{mitad} = \left\lfloor \frac{k}{2} \right\rfloor
 ```
-
-Por otro lado, $f(0) = 0! = 1$. Entonces $P_f(0) == f(0)$.
-
-**Caso de inducción:** $n = k + 1$, $k \geq 0$. Hay que demostrar:
-$P_f(k) == f(k) \rightarrow P_f(k + 1) == f(k + 1)$
-
+Dado que $k \geq 2$, se cumple estrictamente que $1 \leq \text{mitad} < k$. El arreglo $S[0 \dots k)$ se divide en dos subarreglos disjuntos:
 ```math
-P_f(k+1) \rightarrow \text{if } (k+1 == 0)\ 1 \text{ else } (k+1) \ast P_f(k) \rightarrow (k+1) \ast P_f(k)
+S_{\text{izq}} = S[0 \dots \text{mitad}) = [p_0, \ldots, p_{\text{mitad}-1}]
+S_{\text{der}} = S[\text{mitad} \dots k) = [p_{\text{mitad}}, \ldots, p_{k-1}]
 ```
-
-Usando la hipótesis de inducción (HI):
-
+#### 1. Disyunción (sin repetición):
+El conjunto de índices de $S_{\text{izq}}$ es $I_{\text{izq}} = \{0, 1, \ldots, \text{mitad}-1\}$ y el de $S_{\text{der}}$ es $I_{\text{der}} = \{\text{mitad}, \ldots, k-1\}$. Claramente $I_{\text{izq}} \cap I_{\text{der}} = \emptyset$, por lo que ninguna partícula se procesa dos veces.
+#### 2. Exhaustividad (sin pérdida): 
+La unión de ambos conjuntos de índices es:
 ```math
-\rightarrow (k+1) \ast k! = (k+1)!
+I_{\text{izq}} \cup I_{\text{der}} = \{0, 1, \ldots, \text{mitad}-1, \text{mitad}, \ldots, k-1\} = \{0, 1, \ldots, k-1\}
 ```
-
-Por lo tanto, $P_f(k + 1) == f(k + 1)$.
-
-Concluimos por inducción que $\forall n \in \mathbb{N} : P_f(n) == n!$
-
-### Ejemplo: el máximo de una lista
-
-Sea $f : \text{List}[\mathbb{N}] \to \mathbb{N}$ la función que calcula el
-máximo de una lista de enteros positivos, no vacía. Y sea $P_f$ el siguiente
-programa en Scala:
-
-```scala
-def maxLin(l: List[Int]): Int = {
-  if (l.tail.isEmpty) l.head
-  else math.max(maxLin(l.tail), l.head)
-}
-```
-
-Demostraremos que:
-
+Además, $|S_{\text{izq}}| + |S_{\text{der}}| = \text{mitad} + (k - \text{mitad}) = k = |S|$. La concatenación preserva exactamente el orden y la totalidad de los elementos:
 ```math
-\forall n \in \mathbb{N} \setminus \{0\} : P_f(\text{List}(a_1, a_2, \ldots, a_n)) == f(\text{List}(a_1, a_2, \ldots, a_n))
+S_{\text{izq}} \mathbin{++} S_{\text{der}} = S
 ```
+### 2.2. Asociatividad de las operaciones de combinación
+Para que un árbol de computación paralelo produzca el mismo resultado independientemente de cómo se agrupen las tareas, el operador binario $\oplus$ que combina los resultados parciales debe ser asociativo: $(x \oplus y) \oplus z = x \oplus (y \oplus z)$.
+- **Concatenación de arreglos ($\mathbin{++}$):** Para tres secuencias cualesquiera $A, B, C$, se cumple $(A \mathbin{++} B) \mathbin{++} C = A \mathbin{++} (B \mathbin{++} C)$, con elemento neutro el arreglo vacío $[]$.
+- **Suma en los reales ($+$):** Para la energía cinética total y la masa total, la adición escalar cumple $(a + b) + c = a + (b + c)$ con neutro $0.0$.
+- **Suma de pares ponderados en $\mathbb{V} \times \mathbb{R}$:** Definimos la operación de combinación para el centro de masa como:
+    ```math
+    (\vec{R}_1, M_1) \oplus (\vec{R}_2, M_2) = (\vec{R}_1 + \vec{R}_2, M_1 + M_2)
+    ```
+  Dado que la suma vectorial en $\mathbb{R}^2$ y la suma escalar en $\mathbb{R}$ son asociativas componente a componente, $\oplus$ es asociativa con elemento neutro $(\vec{0}, 0.0)$.
 
-**Caso base:** $n = 1$
-
+## 3. Corrección del Punto 1:Paso de la Simulación
+### 3.1. Especificación matemática
+Sea $\Delta t \in \mathbb{R}$ el intervalo de tiempo. La función de transición individual $f_{\text{mover}} : \text{Particula} \times \mathbb{R} \to \text{Particula}$ se especifica como:
 ```math
-P_f(\text{List}(a_1)) \rightarrow \text{if } \text{List}(a_1).\text{tail.isEmpty then } \text{List}(a_1).\text{head else } \ldots \rightarrow \text{List}(a_1).\text{head} \rightarrow a_1
+f_{\text{mover}}((\vec{r}, \vec{v}, m), \Delta t) = (\vec{r} + \vec{v} \cdot \Delta t, \vec{v}, m)
 ```
-
-Por otro lado, $f(\text{List}(a_1)) = a_1$. Entonces
-$P_f(\text{List}(a_1)) == f(\text{List}(a_1))$.
-
-**Caso de inducción:** $n = k + 1$, $k \geq 1$. Se debe demostrar:
-
+Para un sistema $S = [p_0, \ldots, p_{n-1}]$, el paso completo $F_{\text{paso}}(S, \Delta t)$ aplica $f_{\text{mover}}$ a cada partícula:
 ```math
-P_f(\text{List}(b_1, b_2, \ldots, b_k)) == f(\text{List}(b_1, b_2, \ldots, b_k)) \rightarrow P_f(\text{List}(a_1, a_2, \ldots, a_{k+1})) == f(\text{List}(a_1, a_2, \ldots, a_{k+1}))
+F_{\text{paso}}(S, \Delta t) = [f_{\text{mover}}(p_0, \Delta t), \ldots, f_{\text{mover}}(p_{n-1}, \Delta t)]
 ```
+### 3.2. Versiones secuenciales ($mover$, $pasoSecuencial$, $pasoSegmento$)
+- $mover(p, dt)$ construye directamente $Particula(p.pos + (p.vel * dt), p.vel, p.masa)$, lo cual coincide por definición con $f_{\text{mover}}(p, \Delta t)$.
+- $pasoSecuencial(s, dt)$ ejecuta $s.map(mover(_, dt))$. Por definición de la operación funcional $map$ sobre un arreglo de longitud $n$, transforma cada elemento $s(i)$ en $\text{mover}(s(i), dt)$ para todo $0 \leq i < n$, satisfaciendo $\text{pasoSecuencial}(S, \Delta t) = F_{\text{paso}}(S, \Delta t)$.
+- $pasoSegmento(s, dt, desde, hasta)$ ejecuta $s.slice(desde, hasta).map(mover(_, dt))$. El método $slice(desde, hasta)$ extrae exactamente el subarreglo $S[\text{desde} \dots \text{hasta})$, y $map$ aplica $f_{\text{mover}}$ a cada elemento de dicho tramo, cumpliendo:
+  ```math
+    \text{pasoSegmento}(S, \Delta t, a, b) = F_{\text{paso}}(S[a \dots b), \Delta t)
+    ```
 
-Empecemos por calcular qué devuelve $P_f$ usando el modelo de sustitución:
-
+### 3.3. Versión paralela (`pasoParalelo`)
+Demostramos por inducción fuerte sobre la longitud $n = |S|$ que para todo arreglo $S$, todo $\Delta t \in \mathbb{R}$ y todo $\text{umbral} \in \mathbb{Z}$:
 ```math
-P_f(L) \rightarrow \text{if } L.\text{tail.isEmpty then } L.\text{head else math.max}(P_f(L.\text{tail}), L.\text{head})
+\text{pasoParalelo}(S, \Delta t, \text{umbral}) = \text{pasoSecuencial}(S, \Delta t)
 ```
-
+***Caso base:*** $\text{umbral} \leq 0 \lor n \leq \text{umbral}$.Por definición de la guarda `if (umbral <= 0 || s.length <= umbral)`, el programa evalúa directamente la rama secuencial:
 ```math
-\rightarrow \text{math.max}(P_f(\text{List}(a_2, \ldots, a_{k+1})), a_1)
+\text{pasoParalelo}(S, \Delta t, \text{umbral}) \rightarrow \text{pasoSecuencial}(S, \Delta t)
 ```
-
-Sea $b = P_f(\text{List}(a_2, \ldots, a_{k+1}))$; por la hipótesis de
-inducción, $b = f(\text{List}(a_2, \ldots, a_{k+1}))$. Hay dos posibilidades:
-
-- Si $\text{math.max}(b, a_1) = b$, entonces $b \geq a_1$ y
- $b == f(\text{List}(a_1, a_2, \ldots, a_{k+1}))$.
-- Si $\text{math.max}(b, a_1) = a_1$, entonces $a_1 \geq b$ y
- $a_1 == f(\text{List}(a_1, a_2, \ldots, a_{k+1}))$.
-
-Por lo tanto, $P_f(L) == f(L)$.
-
-Concluimos por inducción que:
-
+El caso base se cumple trivialmente.
+**Paso inductivo:** 
+Supongamos que $\text{umbral} > 0$ y $n > \text{umbral}$ (lo cual implica $n \geq 2$).
+Hipótesis de inducción (HI): Para todo sistema $S'$ con $|S'| < n$, se cumple $\text{pasoParalelo}(S', \Delta t, \text{umbral}) = \text{pasoSecuencial}(S', \Delta t)$.
+Al ejecutar `pasoParalelo(S, dt, umbral)`, se calcula $\text{mitad} = \lfloor n / 2 \rfloor$. Como $n \geq 2$, tenemos $1 \leq \text{mitad} < n$, de modo que $|S_{\text{izq}}| = \text{mitad} < n$ y $|S_{\text{der}}| = n - \text{mitad} < n$. Evaluando la expresión:
 ```math
-\forall n \in \mathbb{N} \setminus \{0\} : P_f(\text{List}(a_1, a_2, \ldots, a_n)) == f(\text{List}(a_1, a_2, \ldots, a_n))
+\begin{aligned}
+\text{pasoParalelo}(S, \Delta t, \text{umbral}) &\rightarrow \text{pasoParalelo}(S_{\text{izq}}, \Delta t, \text{umbral}) \mathbin{++} \text{pasoParalelo}(S_{\text{der}}, \Delta t, \text{umbral}) \\
+&\stackrel{\text{HI}}{=} \text{pasoSecuencial}(S_{\text{izq}}, \Delta t) \mathbin{++} \text{pasoSecuencial}(S_{\text{der}}, \Delta t) \\
+&= F_{\text{paso}}(S_{\text{izq}}, \Delta t) \mathbin{++} F_{\text{paso}}(S_{\text{der}}, \Delta t)
+\end{aligned}
 ```
-
-## 2. Argumentar la corrección de programas iterativos
-
-Para argumentar la corrección de programas iterativos, se debe formalizar cómo
-es la iteración. Esto implica definir:
-
-- Cómo se representa un estado de la iteración, $s$.
-- Cuál es el estado inicial, $s_0$.
-- Cuál es el estado final (o cómo se reconoce que un estado es final): $s_f$.
-- Qué condición (o predicado) cumple todo estado: $\text{Inv}(s)$ (invariante
-  de la iteración).
-- El mecanismo para pasar de un estado al siguiente: $\text{transformar}(s)$.
-  Si $s_i$ es el estado $i$, entonces $\text{transformar}(s_i) = s_{i+1}$.
-
-Un programa iterativo tiene la siguiente forma:
-
-```scala
-def Pf(a: A): B = { // Pf recibe a de tipo A, y devuelve f(a) de tipo B
-  def Pf_iter(s: Estado): B =
-    if (esFinal(s)) respuesta(s) else Pf_iter(transformar(s))
-  Pf_iter(s0)
-}
-```
-
-Demostración de corrección:
-
-- $\text{Inv}(s_0)$: el estado inicial cumple la condición invariante.
-- Si $(s_i \neq s_f \land \text{Inv}(s_i)) \rightarrow \text{Inv}(\text{transformar}(s_i))$:
-  el nuevo estado cumple la condición invariante si el estado anterior la
-  cumplía.
-- De lo anterior se concluye $\text{Inv}(s_f)$, es decir, el estado final
-  cumple la condición invariante. Luego,
-  $\text{Inv}(s_f) \rightarrow \text{respuesta}(s_f) == f(a)$.
-- Finalmente, demostrar que siempre se llega al estado final $s_f$. Esto
-  implica que
-  $P_f(a) == \text{iter}(s_0) == \text{respuesta}(s_f) == f(a)$.
-
-### Ejemplo: factorial iterativo
-
-Considere el siguiente programa iterativo en Scala para calcular la función
-factorial:
-
-```scala
-def Pf(n: Int): Int = { // Pf recibe n de tipo Int, y devuelve n! de tipo Int
-  def Pf_iter(i: Int, n: Int, ac: Int): Int =
-    if (i > n) ac else Pf_iter(i + 1, n, i * ac)
-  Pf_iter(1, n, 1)
-}
-```
-
-Este programa implementa el siguiente proceso iterativo:
-
-- Un estado $s = (i, n, ac)$.
-- El estado inicial es $s_0 = (1, n, 1)$.
-- $(i, n, ac)$ es final si $i > n$, o lo que es lo mismo, si $i = n + 1$.
-- La invariante de ciclo es
-  $\text{Inv}(i, n, ac) \equiv i \leq n + 1 \land ac = (i-1)!$.
-  La invariante de ciclo es una relación que SIEMPRE se cumple en el ciclo.
-- $\text{transformar}((i, n, ac)) = (i+1, n, i \ast ac)$.
-
-Ahora, demostramos los puntos mencionados:
-
-**1.** $\text{Inv}(s_0)$: el estado inicial cumple la condición invariante.
-
+Por la propiedad de partición demostrada en la Sección 2.1 ($S_{\text{izq}} \mathbin{++} S_{\text{der}} = S$) y la distributividad de `map` respecto a la concatenación:
 ```math
-s_0 = (1, n, 1) \implies 1 \leq n + 1 \land 1 = 0!
+F_{\text{paso}}(S_{\text{izq}}, \Delta t) \mathbin{++} F_{\text{paso}}(S_{\text{der}}, \Delta t) = F_{\text{paso}}(S_{\text{izq}} \mathbin{++} S_{\text{der}}, \Delta t) = F_{\text{paso}}(S, \Delta t) = \text{pasoSecuencial}(S, \Delta t)
 ```
+Concluimos por inducción que `pasoParalelo` es correcto para cualquier entrada.
 
-**2.** La invariante se mantiene con la transformación de estados,
-$(s_i \neq s_f \land \text{Inv}(s_i)) \rightarrow \text{Inv}(\text{transformar}(s_i))$:
-
-1. Primer cambio, $i = i + 1$, lo que implica $ac = ((i+1) - 1)! = i!$.
-2. Segundo cambio, $ac = i \ast ac$, entonces $ac = (i - 1)! \ast i = i!$.
-3. Como se puede ver en ambos cambios indicados en la transformación, la
-   invariante se mantiene.
-
-**3.** $\text{Inv}(s_f) \rightarrow \text{respuesta}(s_f) == f(a)$
-
+## 4. Corrección de los Puntos 2 y 3: Magnitudes Globales
+### 4.1. Energía cinética (`energiaSecuencial` y `energiaParalela`)
+**Especificación matemática**
+La energía cinética total de un sistema $S = [p_0, \ldots, p_{n-1}]$ es:
 ```math
-(n + 1 \leq n + 1) \land ac = ((n+1)-1)! \rightarrow ac == n!
+E(S) = \sum_{i=0}^{n-1} \frac{1}{2} m_i \|\vec{v}_i\|^2
 ```
+donde $E([]) = 0.0$.
 
-**4.** En cada paso, la componente $i$ del estado incrementa, acercándose a $n+1$.
-Después de $n$ iteraciones, se alcanza $n+1$.
+#### Corrección secuencial
+`energiaSecuencial(s)` calcula `s.map(p => 0.5 * p.masa * math.pow(p.vel.norma, 2)).sum`. Dado que `p.vel.norma` implementa $\sqrt{v_x^2 + v_y^2}$, elevarlo al cuadrado produce $\|\vec{v}_i\|^2$. Al mapear cada partícula a su energía individual y aplicar `.sum` (cuyo neutro para arreglo vacío es 0.0), se obtiene exactamente $E(S)$.
+#### Corrección paralela
+Demostramos por inducción fuerte sobre $n = |S|$ que $\text{energiaParalela}(S, \text{umbral}) = E(S)$:
+- **Caso base ($n \leq \text{umbral} \lor \text{umbral} \leq 0$):** La función invoca `energiaSecuencial(s)`, que ya demostramos igual a $E(S)$.
+- **Paso inductivo ($n > \text{umbral} > 0$):** Asumiendo por HI que $\text{energiaParalela}(S', \text{umbral}) = E(S')$ para todo $|S'| < n$:
+    ```math
+    \begin{aligned}
+    \text{energiaParalela}(S, \text{umbral}) &= \text{energiaParalela}(S_{\text{izq}}, \text{umbral}) + \text{energiaParalela}(S_{\text{der}}, \text{umbral}) \\
+    &\stackrel{\text{HI}}{=} E(S_{\text{izq}}) + E(S_{\text{der}}) \\
+    &= \sum_{i=0}^{\text{mitad}-1} \frac{1}{2} m_i \|\vec{v}_i\|^2 + \sum_{i=\text{mitad}}^{n-1} \frac{1}{2} m_i \|\vec{v}_i\|^2 \\
+    &= \sum_{i=0}^{n-1} \frac{1}{2} m_i \|\vec{v}_i\|^2 = E(S)
+    \end{aligned}
+    ```
 
-Esto implica que $P_f(n) == \text{iter}(1, n, 1) == n!$
-
-### Ejemplo: el máximo de una lista
-
-Se desea calcular el máximo de una lista de enteros positivos, no vacía. Sea
-$f : \text{List}[\mathbb{N}] \to \mathbb{N}$ la función que calcula ese valor.
-Y sea $P_f$ el siguiente programa en Scala:
-
-```scala
-def maxIt(l: List[Int]): Int = {
-  def maxAux(max: Int, l: List[Int]): Int = {
-    if (l.isEmpty) max
-    else maxAux(math.max(max, l.head), l.tail)
-  }
-  maxAux(l.head, l.tail)
-}
-```
-
-Este programa implementa el siguiente proceso iterativo:
-
-- Un estado $s = (max, l)$ donde $l = \text{List}(a_i, a_{i+1}, \ldots, a_k)$
-  es una cola de $L$.
-- El estado inicial es
-  $s_0 = (L.\text{head}, L.\text{tail}) = (a_1, \text{List}(a_2, \ldots, a_k))$.
-- $s = (max, l)$ es final si $l$ es vacía.
-- $\text{Inv}(max, l) \equiv l = \text{List}(a_i, a_{i+1}, \ldots, a_k) \land max = f(\text{List}(a_1, a_2, \ldots, a_{i-1}))$.
-- $\text{transformar}((max, l)) = (nmax, l.\text{tail})$ donde $nmax = max$ si
-  $max \geq l.\text{head}$, y $nmax = l.\text{head}$ si no.
-
-Demostración de los puntos:
-
-**1.** $\text{Inv}(s_0)$: el estado inicial cumple la condición invariante.
-
+### 4.2. Masa total y Centro de masa (`masaTotal`, `centroDeMasaSecuencial`, `centroDeMasaParalelo`)
+#### Especificación matemática
+La masa total $M(S)$ y el vector de posiciones ponderadas $\vec{R}(S)$ se definen como:
 ```math
-s_0 = (a_1, \text{List}(a_2, \ldots, a_k)) \implies a_1 = f(\text{List}(a_1))
+M(S) = \sum_{i=0}^{n-1} m_i, \qquad \vec{R}(S) = \sum_{i=0}^{n-1} m_i \vec{r}_i
 ```
-
-**2.** $(s_i \neq s_f \land \text{Inv}(s_i)) \rightarrow \text{Inv}(\text{transformar}(s_i))$
-
+El centro de masa $\vec{C}(S)$ se define por partes:
 ```math
-\neg\, l.\text{isEmpty} \land l = \text{List}(a_i, a_{i+1}, \ldots, a_k) \land max = f(\text{List}(a_1, a_2, \ldots, a_{i-1}))
+\vec{C}(S) = \begin{cases}
+(0.0, 0.0) & \text{si } M(S) = 0 \\
+\dfrac{1}{M(S)} \vec{R}(S) & \text{si } M(S) > 0
+\end{cases}
 ```
+#### ¿Por qué la suma es válida para repartir y el promedio no lo es directamente?
+La operación de promedio ponderado no es asociativa ni distributiva respecto a la partición de un conjunto cuando los subconjuntos tienen masas distintas. Sean dos mitades $S_{\text{izq}}$ y $S_{\text{der}}$ con masas totales $M_1 = M(S_{\text{izq}})$ y $M_2 = M(S_{\text{der}})$, y centros de masa $\vec{C}_1 = \frac{\vec{R}_1}{M_1}$ y $\vec{C}_2 = \frac{\vec{R}_2}{M_2}$ (con $M_1, M_2 > 0$).
 
+Si intentáramos promediar directamente los centros parciales, obtendríamos:
 ```math
-\rightarrow l.\text{tail} = \text{List}(a_{i+1}, \ldots, a_k) \land nmax = f(\text{List}(a_1, \ldots, a_i))
+\frac{\vec{C}_1 + \vec{C}_2}{2} = \frac{1}{2}\left(\frac{\vec{R}_1}{M_1} + \frac{\vec{R}_2}{M_2}\right) \neq \frac{\vec{R}_1 + \vec{R}_2}{M_1 + M_2} = \vec{C}(S)
 ```
 
-**3.** $\text{Inv}(s_f) \rightarrow \text{respuesta}(s_f) == f(a)$
-
+La igualdad solo se cumple en el caso particular en que $M_1 = M_2$. En general, dividir antes de tiempo pierde la información del peso relativo ($M_1$ frente a $M_2$) de cada mitad.
+Por el contrario, la suma ponderada $\vec{R}(S)$ y la masa total $M(S)$ son funciones lineales aditivas sobre particiones disjuntas:
 ```math
-\text{Inv}((max, \text{List}())) \rightarrow max = f(\text{List}(a_1, \ldots, a_k))
+\vec{R}(S_{\text{izq}} \mathbin{++} S_{\text{der}}) = \vec{R}(S_{\text{izq}}) + \vec{R}(S_{\text{der}}), \qquad M(S_{\text{izq}} \mathbin{++} S_{\text{der}}) = M(S_{\text{izq}}) + M(S_{\text{der}})
+```
+Por lo tanto, es matemáticamente necesario propagar la tupla $(\vec{R}, M)$ en cada nodo del árbol de recursión y realizar una única división $\vec{R}(S) \cdot \frac{1}{M(S)}$ en la raíz al finalizar.
+
+#### Corrección de ``centroDeMasaSecuencial``
+1. ``masaTotal(s)`` calcula ``s.map(p => p.masa).sum``, que implementa directamente $M(S)$.
+2. Si ``masaTotal(s) == 0``, retorna ``Vector2(0.0, 0.0)``, cumpliendo el primer caso de la especificación.
+3. Si ``masaTotal(s) != 0`` (por lo tanto $n \geq 1$), calcula ``s.map(p => p.pos * p.masa).reduce(_ + _) * (1 / masaTotal(s))``, lo que corresponde exactamente a $\vec{R}(S) \cdot \frac{1}{M(S)} = \vec{C}(S)$.
+
+#### Corrección de ``centroDeMasaParalelo``
+La función utiliza una función auxiliar recursiva ``auxiliar(sub: Sistema): (Vector2, Double)``. Demostramos por inducción fuerte sobre $n = |sub|$ que:
+```math
+\text{auxiliar}(sub) = (\vec{R}(sub), M(sub))
 ```
 
-**4.** En cada paso, la lista $l$ se reduce, acercándose a ser vacía. Después de
-$k$ iteraciones, $l = \text{List}()$.
+- Caso base ($|sub| \leq \text{umbral} \lor \text{umbral} \leq 0$):
+Calcula $m = \text{masaTotal}(sub) = M(sub)$.
+  - Si $m = 0$, todas las partículas tienen masa $0$ (o $sub$ es vacío), por lo que $\vec{R}(sub) = (0.0, 0.0)$ y retorna ((0.0, 0.0), 0.0).
+  - Si $m \neq 0$, calcula ``centroDeMasaSecuencial(sub) * m``:
+      ```math
+      \vec{C}(sub) \cdot M(sub) = \left(\frac{1}{M(sub)} \vec{R}(sub)\right) \cdot M(sub) = \vec{R}(sub)
+      ```
+    Retorna $(\vec{R}(sub), M(sub))$.
+- Paso inductivo ($|sub| > \text{umbral} > 0$):
+  
+    Por hipótesis de inducción, las llamadas recursivas sobre $sub_{\text{izq}}$ y $sub_{\text{der}}$ retornan $(\vec{R}(sub_{\text{izq}}), M(sub_{\text{izq}}))$ y $(\vec{R}(sub_{\text{der}}), M(sub_{\text{der}}))$. Al combinarlas:
+    ```math
+    (\vec{R}(sub_{\text{izq}}) + \vec{R}(sub_{\text{der}}), M(sub_{\text{izq}}) + M(sub_{\text{der}})) = (\vec{R}(sub), M(sub))
+    ```
+- Resultado final en la raíz:
 
-Esto implica que $P_f(L) == \text{maxAux}(L.\text{head}, L.\text{tail}) == f(L)$
+    Al invocar ``auxiliar(s)``, se obtiene ``(sumaTotal, masaTot)`` $= (\vec{R}(S), M(S))$.
+
+    Finalmente, la guarda ``if (masaTot == 0) Vector2(0.0, 0.0) else sumaTotal * (1 / masaTot)`` aplica exactamente la definición de $\vec{C}(S)$, garantizando que $\text{centroDeMasaParalelo}(S, \text{umbral}) = \text{centroDeMasaSecuencial}(S)$.
+
+
+## 5. Corrección de los Puntos 4 y 5: Modelo de Costos y Medición
+### 5.1. Trabajo, profundidad y tiempo estimado
+- ``trabajo(n)``: Retorna $n$. Dado que cada partícula requiere un número constante de operaciones aritméticas independientes ($O(1)$), el trabajo total $W(n) = n$ es lineal respecto al tamaño del sistema.
+- ``profundidad(n, umbral)``: Modelamos la recurrencia del camino crítico $D(n, u)$:
+    ```math
+    D(n, u) = \begin{cases} 
+    n & \text{si } n \leq u \\
+    1 + D(\lfloor n/2 \rfloor, u) & \text{si } n > u
+    \end{cases}
+  ```
+  Como $n > u \geq 1 \implies \lfloor n/2 \rfloor < n$, la secuencia de argumentos es estrictamente decreciente y acotada inferiormente, garantizando la terminación en $\lceil \log_2(n/u) \rceil$ pasos recursivos más el costo secuencial del tramo hoja.
+- ``tiempoEstimado(n, p, umbral)``: Implementa directamente la cota superior del teorema de Brent para planificación sobre $p$ procesadores:
+
+    ```math
+    T_p(n, u) = \frac{W(n)}{p} + D(n, u) = \frac{n}{p} + \text{profundidad}(n, u)
+    ```
+### 5.2. Aceleración y selección de umbral
+``aceleracion(tSecuencial, tParalelo)``: Calcula el cociente de speedup definido por la ley de Amdahl:
+```math
+S_p = \frac{T_{\text{secuencial}}}{T_{\text{paralelo}}}
+```
+
+- ``umbralConveniente(s, dt, umbrales)``:
+  - Si ``umbrales.isEmpty``, retorna ``s.length`` (ejecución sin particiones, equivalente a secuencial), cumpliendo la especificación para listas vacías.
+  - En caso contrario, evalúa la función de costo $g(u) = \text{medir}(3)(\text{pasoParalelo}(s, dt, u))$ para cada $u \in \text{umbrales}$ y retorna $\arg\min_{u \in \text{umbrales}} g(u)$ mediante ``minBy``, garantizando la selección del umbral de menor tiempo medido.

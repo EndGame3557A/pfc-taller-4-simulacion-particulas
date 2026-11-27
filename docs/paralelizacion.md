@@ -226,7 +226,7 @@ No podemos decir con seguridad cuál umbral es el mejor. El control debería dar
 - **Umbrales grandes** (partir pocas veces, como $n/2$): casi no gastan en repartir, y por eso dieron los mejores resultados en 1M y 4M (2,34 y 1,60). Aun así no son confiables: en 2M dieron 0,64.
 - **Umbral $u = n$:** no se parte nada, así que es el control.
 
-Con esto, lo más razonable es usar un umbral grande, que parta pocas veces. Esto es lo contrario de lo que decía el modelo del punto 4, que favorecía el umbral más pequeño. [Diga por qué creen que el modelo se equivoca: no cuenta el costo de crear tareas ni de copiar.]
+Con esto, lo más razonable es usar un umbral grande, que parta pocas veces. Esto es lo contrario de lo que decía el modelo del punto 4, que favorecía el umbral más pequeño. Esto es lo contrario de lo que decía el modelo del punto 4, que favorecía el umbral más pequeño. Creemos que el modelo se equivoca porque solo cuenta una operación por partícula y no el costo de crear tareas ni de copiar tramos con `slice` y `++`.
 
 ### 4.2 Por qué la aceleración deja de crecer
 
